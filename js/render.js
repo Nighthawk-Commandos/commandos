@@ -122,13 +122,13 @@ function rankPill(r) {
     if (!r) return '<span class="muted-val">—</span>';
     var c = RANK_COLOURS[r];
     if (!c) return '<span class="rank-plain">' + esc(r) + '</span>';
-    return '<span class="rank-pill" style="background:' + c + '">' + esc(r) + '</span>';
+    return '<span class="rank-pill" data-bg="' + c + '">' + esc(r) + '</span>';
 }
 function deptPill(n) {
     if (!n) return '';
     var c = DEPT_COLOURS[n] || DEPT_COLOURS[n.toUpperCase()];
     if (!c) return '<span class="rank-plain">' + esc(n) + '</span>';
-    return '<span class="dept-pill" style="background:' + c + '">' + esc(n) + '</span>';
+    return '<span class="dept-pill" data-bg="' + c + '">' + esc(n) + '</span>';
 }
 function deptPills(s) {
     if (!s) return '<span class="muted-val">—</span>';
@@ -353,7 +353,7 @@ function renderHonoredRows(members) {
         var medals = m.medals.map(function(md){
             var st = MEDAL_STYLES[md];
             return st
-                ? '<span class="medal" style="background:'+st.bg+';color:'+st.color+';border:1px solid '+st.color+'33">'+esc(md)+'</span>'
+                ? '<span class="medal" data-bg="'+st.bg+'" data-color="'+st.color+'" data-border="1px solid '+st.color+'33">'+esc(md)+'</span>'
                 : '<span class="medal medal-default">'+esc(md)+'</span>';
         }).join('');
         buf.push('<tr><td>'+esc(m.username)+'</td>'+
@@ -388,8 +388,8 @@ function buildDeptBlocks(depts, q) {
         var rows = members.map(function(m){
             return '<div class="dept-member"><span class="un">'+esc(m.username)+'</span><span class="rk">'+esc(m.rank)+'</span></div>';
         }).join('') || '<div class="dept-empty">No matches</div>';
-        buf.push('<div class="dept-block"><div class="dept-head" style="background:'+colour+'22;border-bottom:2px solid '+colour+'55">'+
-            '<div class="dept-head-name" style="color:'+colour+'">'+esc(dept.name)+'</div>'+
+        buf.push('<div class="dept-block"><div class="dept-head" data-bg="'+colour+'22" data-border-bottom="2px solid '+colour+'55">'+
+            '<div class="dept-head-name" data-color="'+colour+'">'+esc(dept.name)+'</div>'+
             '<div class="dept-head-count">'+members.length+' member'+(members.length===1?'':'s')+(q?' matching':'')+'</div>'+
             '</div>'+rows+'</div>');
     }
@@ -494,7 +494,7 @@ function fHead(icon, title, desc) {
         '<div><div class="form-card-title">'+esc(title)+'</div><div class="form-card-desc">'+esc(desc)+'</div></div></div>';
 }
 function honeypot(id) {
-    return '<div style="display:none"><input type="text" id="'+id+'" tabindex="-1" autocomplete="off"></div>';
+    return '<div class="hp-wrap"><input type="text" id="'+id+'" tabindex="-1" autocomplete="off"></div>';
 }
 function setFieldErr(id, msg) {
     var f=$(id); if(!f)return; f.classList.add('has-error');
@@ -505,3 +505,11 @@ function clrFieldErr(id) {
     var e=f.querySelector('.field-error'); if(e) e.style.display='none';
 }
 function clrAll(ids) { ids.forEach(clrFieldErr); }
+
+// ── Apply data-* colour attributes (replaces inline styles) ───
+function applyDataStyles(root) {
+    root.querySelectorAll('[data-bg]').forEach(function(el) { el.style.background = el.getAttribute('data-bg'); });
+    root.querySelectorAll('[data-color]').forEach(function(el) { el.style.color = el.getAttribute('data-color'); });
+    root.querySelectorAll('[data-border]').forEach(function(el) { el.style.border = el.getAttribute('data-border'); });
+    root.querySelectorAll('[data-border-bottom]').forEach(function(el) { el.style.borderBottom = el.getAttribute('data-border-bottom'); });
+}

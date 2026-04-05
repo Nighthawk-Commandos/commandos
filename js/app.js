@@ -9,7 +9,9 @@ window._D = null;
 
 // ── Content setter (used by render.js forms.js and here) ──────
 function setContent(html) {
-    document.getElementById('content').innerHTML = html;
+    var el = document.getElementById('content');
+    el.innerHTML = html;
+    applyDataStyles(el);
 }
 
 // ── Navigation ────────────────────────────────────────────────
@@ -94,20 +96,33 @@ function refreshData() {
     });
 }
 
+// ── Wire static DOM event handlers (replaces inline onclick) ──
+document.addEventListener('DOMContentLoaded', function() {
+    var hbg = document.getElementById('hbg');
+    if (hbg) hbg.addEventListener('click', toggleSidebar);
+
+    var refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
+
+    document.querySelectorAll('.nav-item').forEach(function(item) {
+        item.addEventListener('click', function() { go(item.dataset.key, item); });
+    });
+});
+
 // ── Boot ──────────────────────────────────────────────────────
 (function boot() {
     if (!window.SCRIPT_URL || window.SCRIPT_URL.indexOf('YOUR_DEPLOYMENT_ID_HERE') !== -1) {
         document.getElementById('loading').classList.add('hidden');
         setContent(
-            '<div style="max-width:540px;padding:8px 0">' +
+            '<div class="setup-wrap">' +
             '<div class="ph"><div class="ey">Setup Required</div><h1>Set Your Script URL</h1>' +
             '<div class="sub">Edit config.js and replace YOUR_DEPLOYMENT_ID_HERE with your Apps Script /exec URL.</div></div>' +
-            '<div class="info-block" style="margin-top:20px;line-height:1.9">' +
-            '<div class="kv"><span class="k">1. Apps Script</span><span class="v" style="color:var(--muted)">Deploy → Manage Deployments → New</span></div>' +
-            '<div class="kv"><span class="k">2. Access</span><span class="v" style="color:var(--muted)">Execute as: Me · Who: Anyone</span></div>' +
-            '<div class="kv"><span class="k">3. Copy URL</span><span class="v" style="color:var(--muted)">The /exec URL from the dialog</span></div>' +
-            '<div class="kv"><span class="k">4. Paste into config.js</span><span class="v" style="color:var(--muted)">SCRIPT_URL = \'…\'</span></div>' +
-            '<div class="kv"><span class="k">5. Add handleApiRequest()</span><span class="v" style="color:var(--muted)">See Code.gs.patch.js</span></div>' +
+            '<div class="info-block setup-steps">' +
+            '<div class="kv"><span class="k">1. Apps Script</span><span class="v muted">Deploy → Manage Deployments → New</span></div>' +
+            '<div class="kv"><span class="k">2. Access</span><span class="v muted">Execute as: Me · Who: Anyone</span></div>' +
+            '<div class="kv"><span class="k">3. Copy URL</span><span class="v muted">The /exec URL from the dialog</span></div>' +
+            '<div class="kv"><span class="k">4. Paste into config.js</span><span class="v muted">SCRIPT_URL = \'…\'</span></div>' +
+            '<div class="kv"><span class="k">5. Add handleApiRequest()</span><span class="v muted">See Code.gs.patch.js</span></div>' +
             '</div></div>'
         );
         return;

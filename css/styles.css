@@ -297,3 +297,11 @@ td.wrap-right { white-space: normal; word-break: break-all; text-align: right; }
 /* Links */
 .link-accent { color: var(--accent2); text-decoration: none; }
 .link-accent:hover { text-decoration: underline; }
+
+/* ── Utility: previously-inline styles ───────────────────────── */
+.hp-wrap { display: none; }
+.initially-hidden { display: none; }
+.setup-wrap { max-width: 540px; padding: 8px 0; }
+.info-block.setup-steps { margin-top: 20px; line-height: 1.9; }
+.kv .v.muted { color: var(--muted); }
+.field-info.mt { margin-top: 4px; }

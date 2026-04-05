@@ -83,7 +83,7 @@ function renderFormEditEventLog() {
         fld('field-eel-id','Event ID','*',
             '<div class="inline-action"><input type="text" id="eel-id" placeholder="e.g. EVT-001"><button class="btn-ghost" type="button" onclick="lookupEELEvent()">Load Event</button></div>',
             'Event ID is required.') +
-        '<div id="eel-event-info" style="display:none"></div>' +
+        '<div id="eel-event-info" class="initially-hidden"></div>' +
         fld('field-eel-field','Field to Edit','*',
             '<select id="eel-field" onchange="eelFieldChange()" disabled>'+
             '<option value="" disabled selected>Load an event first…</option>'+
@@ -92,7 +92,7 @@ function renderFormEditEventLog() {
             '<option value="Screenshot Link">Screenshot Link</option>'+
             '<option value="Attendees">Attendees</option>'+
             '</select>','Field required.') +
-        '<div id="eel-nv-wrap" style="display:none"></div>' +
+        '<div id="eel-nv-wrap" class="initially-hidden"></div>' +
         '<div class="form-actions"><button class="btn-ghost" onclick="resetEEL()">Clear</button>' +
         '<button class="btn-primary" id="eel-submit-btn" onclick="submitEEL()" disabled>Submit Request</button></div>' +
         '</div></div></div>';
@@ -209,7 +209,7 @@ function renderFormTransfer() {
             '</select>','Transfer type required.') +
         fld('field-tr-old','Old Username','*','<input type="text" id="tr-old" placeholder="Username currently in the sheets">','Old username required.') +
         fld('field-tr-new','New Username','*','<input type="text" id="tr-new" placeholder="New username to replace it with">','New username required.') +
-        '<div id="tr-ev-field" style="display:none">' +
+        '<div id="tr-ev-field" class="initially-hidden">' +
         fld('field-tr-ev','Evidence of Account Ownership','*','<input type="text" id="tr-ev" placeholder="https://imgur.com/…">','Evidence required for account transfers.') +
         '<div class="field-hint">Accepted: Imgur, Gyazo, Prntscr. Discord links not accepted.</div>' +
         '</div>' +
@@ -245,7 +245,7 @@ function submitTR() {
             if(r&&r.success){
                 toast('Request submitted!','success');
                 var res=$('tr-result');
-                if(res)res.innerHTML='<div class="field-info" style="margin-top:4px">'+
+                if(res)res.innerHTML='<div class="field-info mt">'+
                     '<div class="info-row"><span class="ik">Request ID</span><span class="iv">'+esc(r.requestId)+'</span></div>'+
                     '<div class="info-row"><span class="ik">Status</span><span class="iv">Pending admin approval</span></div></div>';
             } else toast((r&&r.error)||'Submission failed.','error');
