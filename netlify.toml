@@ -1,0 +1,46 @@
+# netlify.toml
+
+[build]
+publish = "."   # serve from repo root; change to "dist" if you add a build step
+
+# ── SPA routing ───────────────────────────────────────────────
+# All routes fall back to index.html (not needed for this SPA
+# since navigation is JS-only, but good to have for direct URLs)
+[[redirects]]
+from   = "/*"
+to     = "/index.html"
+status = 200
+
+# ── Cache headers ─────────────────────────────────────────────
+# HTML: never cache (always fresh)
+[[headers]]
+for = "/index.html"
+[headers.values]
+Cache-Control = "no-cache, no-store, must-revalidate"
+
+# config.js: never cache (URL changes here should apply immediately)
+[[headers]]
+for = "/config.js"
+[headers.values]
+Cache-Control = "no-cache, no-store, must-revalidate"
+
+# JS and CSS: cache for 1 week (add ?v=X to bust when needed)
+[[headers]]
+for = "/*.js"
+[headers.values]
+Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+
+[[headers]]
+for = "/*.css"
+[headers.values]
+Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+
+# ── Security headers (applied to all pages) ───────────────────
+[[headers]]
+for = "/*"
+[headers.values]
+X-Frame-Options           = "DENY"
+X-Content-Type-Options    = "nosniff"
+Referrer-Policy           = "strict-origin-when-cross-origin"
+Permissions-Policy        = "camera=(), microphone=(), geolocation=()"
+Content-Security-Policy   = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com data:; connect-src 'self' https://script.google.com;"

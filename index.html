@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNI:C Commandos Mainframe</title>
+    <link rel="icon" href="https://i.imgur.com/YA7Ilep.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+
+<div id="loading">
+    <div class="lt">TNI:C</div>
+    <div class="spinner"></div>
+    <div class="ls" id="loading-status">Loading mainframe…</div>
+</div>
+
+<div id="hbg" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
+
+<div id="app">
+    <aside id="sidebar">
+        <div class="sidebar-logo">
+            <div class="label">TNI Commandos</div>
+            <div class="title">Commandos<br>Mainframe</div>
+        </div>
+        <div class="sidebar-actions">
+            <button id="refresh-btn" onclick="refreshData()">↻ Refresh Data</button>
+        </div>
+        <nav>
+            <div class="nav-group">Overview</div>
+            <div class="nav-item active" data-key="settings"      onclick="go('settings',this)"><span class="nav-dot"></span>Settings</div>
+            <div class="nav-group">Trackers</div>
+            <div class="nav-item" data-key="activity"             onclick="go('activity',this)"><span class="nav-dot"></span>Activity Tracker</div>
+            <div class="nav-item" data-key="officers"             onclick="go('officers',this)"><span class="nav-dot"></span>Officer Tracker</div>
+            <div class="nav-item" data-key="honored"              onclick="go('honored',this)"><span class="nav-dot"></span>Honored Tracker</div>
+            <div class="nav-item" data-key="departments"          onclick="go('departments',this)"><span class="nav-dot"></span>Department Members</div>
+            <div class="nav-group">Events</div>
+            <div class="nav-item" data-key="weekly"               onclick="go('weekly',this)"><span class="nav-dot"></span>Weekly Events</div>
+            <div class="nav-item" data-key="monthly"              onclick="go('monthly',this)"><span class="nav-dot"></span>Monthly Events</div>
+            <div class="nav-group">Forms</div>
+            <div class="nav-item" data-key="form-eventlog"        onclick="go('form-eventlog',this)"><span class="nav-dot"></span>Event Log</div>
+            <div class="nav-item" data-key="form-editeventlog"    onclick="go('form-editeventlog',this)"><span class="nav-dot"></span>Edit Event Log</div>
+            <div class="nav-item" data-key="form-transfer"        onclick="go('form-transfer',this)"><span class="nav-dot"></span>Stats Transfer</div>
+            <div class="nav-item" data-key="form-exemption"       onclick="go('form-exemption',this)"><span class="nav-dot"></span>Exemption</div>
+            <div class="nav-item" data-key="form-missingap"       onclick="go('form-missingap',this)"><span class="nav-dot"></span>Missing AP</div>
+        </nav>
+    </aside>
+    <main id="main"><div id="content"></div></main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Load order matters: config → api → render → forms → app -->
+<script src="./js/config.js"></script>
+<script src="./js/api.js"></script>
+<script src="./js/render.js"></script>
+<script src="./js/forms.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>
