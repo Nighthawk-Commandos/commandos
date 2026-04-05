@@ -4,31 +4,30 @@
 
 'use strict';
 
-// ── Colour maps ───────────────────────────────────────────────
-var RANK_COLOURS = {
-    'Probationary Trooper':'#999999','Commando':'#B5D9FD','Sentinel':'#97BDFF',
-    'Infiltrator':'#949BFF','Operative':'#A970EC','Specialist':'#C52AC7',
-    'Prestige':'#980000','Nighthawk Nine':'#F1C232',
-    'Interim Warrant Officer':'#9FB6D9','Warrant Officer':'#0090EE',
-    'Chief Warrant Officer':'#1F36B3','Captain':'#006EFA',
-    'Commandant':'#1E33DF','Developer':'#1E33DF','Advisor':'#4B566F',
-    'Deputy Director':'#7490E3','Director':'#C8A44A'
+// ── CSS class maps (colours live in styles.css) ───────────────
+var RANK_CLASSES = {
+    'Probationary Trooper':'rk-prob','Commando':'rk-commando','Sentinel':'rk-sentinel',
+    'Infiltrator':'rk-infiltrator','Operative':'rk-operative','Specialist':'rk-specialist',
+    'Prestige':'rk-prestige','Nighthawk Nine':'rk-nighthawk',
+    'Interim Warrant Officer':'rk-iwo','Warrant Officer':'rk-wo',
+    'Chief Warrant Officer':'rk-cwo','Captain':'rk-captain',
+    'Commandant':'rk-commandant','Developer':'rk-developer','Advisor':'rk-advisor',
+    'Deputy Director':'rk-dd','Director':'rk-director'
 };
-var DEPT_COLOURS = {
-    'GHOSTS':'#674EA7','PROGRESSION':'#3D85C6','WELFARE':'#A64D79',
-    'INTERNAL AFFAIRS':'#434343','LIBRARIUM':'#F1C232',
-    'Ghosts':'#674EA7','Progression':'#3D85C6','Welfare':'#A64D79',
-    'Internal Affairs':'#434343','Librarium':'#F1C232'
+var DEPT_CLASSES = {
+    'GHOSTS':'dp-ghosts','PROGRESSION':'dp-prog','WELFARE':'dp-welfare',
+    'INTERNAL AFFAIRS':'dp-ia','LIBRARIUM':'dp-lib',
+    'Ghosts':'dp-ghosts','Progression':'dp-prog','Welfare':'dp-welfare',
+    'Internal Affairs':'dp-ia','Librarium':'dp-lib'
 };
-var MEDAL_STYLES = {
-    'Legend':                    {bg:'#274E13',color:'#ffffff'},
-    'Cheerleader':               {bg:'#274E13',color:'#ffffff'},
-    'Distinguished Officer':     {bg:'#1a2466',color:'#8BA4FF'},
-    "Commandant's Excellence":   {bg:'#1e2728',color:'#7EA4AA'},
-    "Advisor's Honor":           {bg:'#0d2029',color:'#5BBAD4'},
-    "Deputy Director's Valor":   {bg:'#2a2a2a',color:'#DAD3DA'},
-    "Director's Merit":          {bg:'#1a2830',color:'#8AB0BE'},
-    "Director-General's Virtue": {bg:'#2d1515',color:'#C47070'}
+var MEDAL_CLASSES = {
+    'Legend':'md-legend','Cheerleader':'md-cheerleader',
+    'Distinguished Officer':'md-dist-officer',
+    "Commandant's Excellence":'md-cmd-exc',
+    "Advisor's Honor":'md-adv-honor',
+    "Deputy Director's Valor":'md-dd-valor',
+    "Director's Merit":'md-dir-merit',
+    "Director-General's Virtue":'md-dg-virtue'
 };
 
 // ── DOM shorthand ─────────────────────────────────────────────
@@ -120,15 +119,15 @@ function statusBadge(s) {
 }
 function rankPill(r) {
     if (!r) return '<span class="muted-val">—</span>';
-    var c = RANK_COLOURS[r];
-    if (!c) return '<span class="rank-plain">' + esc(r) + '</span>';
-    return '<span class="rank-pill" data-bg="' + c + '">' + esc(r) + '</span>';
+    var cls = RANK_CLASSES[r];
+    if (!cls) return '<span class="rank-plain">' + esc(r) + '</span>';
+    return '<span class="rank-pill ' + cls + '">' + esc(r) + '</span>';
 }
 function deptPill(n) {
     if (!n) return '';
-    var c = DEPT_COLOURS[n] || DEPT_COLOURS[n.toUpperCase()];
-    if (!c) return '<span class="rank-plain">' + esc(n) + '</span>';
-    return '<span class="dept-pill" data-bg="' + c + '">' + esc(n) + '</span>';
+    var cls = DEPT_CLASSES[n] || DEPT_CLASSES[n.toUpperCase()];
+    if (!cls) return '<span class="rank-plain">' + esc(n) + '</span>';
+    return '<span class="dept-pill ' + cls + '">' + esc(n) + '</span>';
 }
 function deptPills(s) {
     if (!s) return '<span class="muted-val">—</span>';
@@ -351,10 +350,10 @@ function renderHonoredRows(members) {
     for (var i=0; i<filtered.length; i++) {
         var m = filtered[i];
         var medals = m.medals.map(function(md){
-            var st = MEDAL_STYLES[md];
-            return st
-                ? '<span class="medal" data-bg="'+st.bg+'" data-color="'+st.color+'" data-border="1px solid '+st.color+'33">'+esc(md)+'</span>'
-                : '<span class="medal medal-default">'+esc(md)+'</span>';
+            var mc = MEDAL_CLASSES[md];
+            return mc
+                ? '<span class="medal ' + mc + '">' + esc(md) + '</span>'
+                : '<span class="medal medal-default">' + esc(md) + '</span>';
         }).join('');
         buf.push('<tr><td>'+esc(m.username)+'</td>'+
             '<td class="medals-cell">'+(medals||'<span class="muted-val">—</span>')+'</td>'+
@@ -388,8 +387,9 @@ function buildDeptBlocks(depts, q) {
         var rows = members.map(function(m){
             return '<div class="dept-member"><span class="un">'+esc(m.username)+'</span><span class="rk">'+esc(m.rank)+'</span></div>';
         }).join('') || '<div class="dept-empty">No matches</div>';
-        buf.push('<div class="dept-block"><div class="dept-head" data-bg="'+colour+'22" data-border-bottom="2px solid '+colour+'55">'+
-            '<div class="dept-head-name" data-color="'+colour+'">'+esc(dept.name)+'</div>'+
+        var dc = DEPT_CLASSES[dept.name] || DEPT_CLASSES[(dept.name||'').toUpperCase()] || '';
+        buf.push('<div class="dept-block"><div class="dept-head ' + dc + '">'+
+            '<div class="dept-head-name ' + dc + '">'+esc(dept.name)+'</div>'+
             '<div class="dept-head-count">'+members.length+' member'+(members.length===1?'':'s')+(q?' matching':'')+'</div>'+
             '</div>'+rows+'</div>');
     }
@@ -506,10 +506,3 @@ function clrFieldErr(id) {
 }
 function clrAll(ids) { ids.forEach(clrFieldErr); }
 
-// ── Apply data-* colour attributes (replaces inline styles) ───
-function applyDataStyles(root) {
-    root.querySelectorAll('[data-bg]').forEach(function(el) { el.style.background = el.getAttribute('data-bg'); });
-    root.querySelectorAll('[data-color]').forEach(function(el) { el.style.color = el.getAttribute('data-color'); });
-    root.querySelectorAll('[data-border]').forEach(function(el) { el.style.border = el.getAttribute('data-border'); });
-    root.querySelectorAll('[data-border-bottom]').forEach(function(el) { el.style.borderBottom = el.getAttribute('data-border-bottom'); });
-}

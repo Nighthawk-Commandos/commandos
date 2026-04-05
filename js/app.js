@@ -9,9 +9,7 @@ window._D = null;
 
 // ── Content setter (used by render.js forms.js and here) ──────
 function setContent(html) {
-    var el = document.getElementById('content');
-    el.innerHTML = html;
-    applyDataStyles(el);
+    document.getElementById('content').innerHTML = html;
 }
 
 // ── Navigation ────────────────────────────────────────────────

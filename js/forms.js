@@ -298,7 +298,7 @@ function toggleExDept(name) {
     renderExDeptTags();
     var dd=$('ex-dept-dd');
     if(dd) dd.querySelectorAll('.ac-option').forEach(function(o){
-        if(o.textContent===name) o.style.background = EX.departments.indexOf(name)>-1?'rgba(200,164,74,.15)':'';
+        if(o.textContent===name) o.classList.toggle('selected', EX.departments.indexOf(name)>-1);
     });
     if(EX.departments.length) clrFieldErr('field-ex-dept');
 }
@@ -347,7 +347,7 @@ function resetEX() {
     EX={username:'',departments:[]};
     ['ex-user-inp','ex-reason','ex-start','ex-end'].forEach(function(id){sv(id,'');});
     renderExDeptTags();
-    var dd=$('ex-dept-dd'); if(dd)dd.querySelectorAll('.ac-option').forEach(function(o){o.style.background='';});
+    var dd=$('ex-dept-dd'); if(dd)dd.querySelectorAll('.ac-option').forEach(function(o){o.classList.remove('selected');});
     clrAll(['field-ex-user','field-ex-reason','field-ex-start','field-ex-end','field-ex-dept']);
     var di=$('ex-days-info'); if(di)di.innerHTML='';
     var ci=$('ex-calc-info'); if(ci)ci.innerHTML='';

@@ -256,6 +256,7 @@ td.wrap-right { white-space: normal; word-break: break-all; text-align: right; }
 .ac-option { padding: 8px 12px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border); transition: background .1s; }
 .ac-option:last-child { border-bottom: none; }
 .ac-option:hover { background: rgba(200,164,74,.1); color: var(--accent2); }
+.ac-option.selected { background: rgba(200,164,74,.15); }
 
 /* Multi-tag input */
 .tags-area {
@@ -305,3 +306,51 @@ td.wrap-right { white-space: normal; word-break: break-all; text-align: right; }
 .info-block.setup-steps { margin-top: 20px; line-height: 1.9; }
 .kv .v.muted { color: var(--muted); }
 .field-info.mt { margin-top: 4px; }
+
+/* ── Rank pill colours ───────────────────────────────────────── */
+.rank-pill.rk-prob       { background: #999999; }
+.rank-pill.rk-commando   { background: #B5D9FD; }
+.rank-pill.rk-sentinel   { background: #97BDFF; }
+.rank-pill.rk-infiltrator{ background: #949BFF; }
+.rank-pill.rk-operative  { background: #A970EC; }
+.rank-pill.rk-specialist { background: #C52AC7; }
+.rank-pill.rk-prestige   { background: #980000; }
+.rank-pill.rk-nighthawk  { background: #F1C232; }
+.rank-pill.rk-iwo        { background: #9FB6D9; }
+.rank-pill.rk-wo         { background: #0090EE; }
+.rank-pill.rk-cwo        { background: #1F36B3; }
+.rank-pill.rk-captain    { background: #006EFA; }
+.rank-pill.rk-commandant { background: #1E33DF; }
+.rank-pill.rk-developer  { background: #1E33DF; }
+.rank-pill.rk-advisor    { background: #4B566F; }
+.rank-pill.rk-dd         { background: #7490E3; }
+.rank-pill.rk-director   { background: #C8A44A; }
+
+/* ── Dept pill colours ───────────────────────────────────────── */
+.dept-pill.dp-ghosts  { background: #674EA7; }
+.dept-pill.dp-prog    { background: #3D85C6; }
+.dept-pill.dp-welfare { background: #A64D79; }
+.dept-pill.dp-ia      { background: #434343; }
+.dept-pill.dp-lib     { background: #F1C232; }
+
+/* ── Dept block header colours ───────────────────────────────── */
+.dept-head.dp-ghosts  { background: #674EA722; border-bottom: 2px solid #674EA755; }
+.dept-head.dp-prog    { background: #3D85C622; border-bottom: 2px solid #3D85C655; }
+.dept-head.dp-welfare { background: #A64D7922; border-bottom: 2px solid #A64D7955; }
+.dept-head.dp-ia      { background: #43434322; border-bottom: 2px solid #43434355; }
+.dept-head.dp-lib     { background: #F1C23222; border-bottom: 2px solid #F1C23255; }
+.dept-head-name.dp-ghosts  { color: #674EA7; }
+.dept-head-name.dp-prog    { color: #3D85C6; }
+.dept-head-name.dp-welfare { color: #A64D79; }
+.dept-head-name.dp-ia      { color: #434343; }
+.dept-head-name.dp-lib     { color: #F1C232; }
+
+/* ── Medal colours ───────────────────────────────────────────── */
+.medal.md-legend       { background: #274E13; color: #ffffff; border: 1px solid #ffffff33; }
+.medal.md-cheerleader  { background: #274E13; color: #ffffff; border: 1px solid #ffffff33; }
+.medal.md-dist-officer { background: #1a2466; color: #8BA4FF; border: 1px solid #8BA4FF33; }
+.medal.md-cmd-exc      { background: #1e2728; color: #7EA4AA; border: 1px solid #7EA4AA33; }
+.medal.md-adv-honor    { background: #0d2029; color: #5BBAD4; border: 1px solid #5BBAD433; }
+.medal.md-dd-valor     { background: #2a2a2a; color: #DAD3DA; border: 1px solid #DAD3DA33; }
+.medal.md-dir-merit    { background: #1a2830; color: #8AB0BE; border: 1px solid #8AB0BE33; }
+.medal.md-dg-virtue    { background: #2d1515; color: #C47070; border: 1px solid #C4707033; }
