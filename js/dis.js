@@ -546,33 +546,46 @@ function _disRenderGamePool(body) {
 // ── Admin: Audit Log ───────────────────────────────────────────
 function _disAdminAudit(body) {
     body.innerHTML = '<div class="obj-loading">Loading audit log\u2026</div>';
-    fetch('/api/dis/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get-audit' })
-    })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            var log = data.log || [];
-            if (log.length === 0) {
-                body.innerHTML = '<div class="empty">No audit log entries.</div>';
-                return;
-            }
-            var html = '<div class="tbl-wrap"><table>' +
-                '<thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody>';
-            log.slice().reverse().forEach(function (entry) {
-                html += '<tr>' +
-                    '<td style="white-space:nowrap;font-size:11px">' + new Date(entry.timestamp).toLocaleString() + '</td>' +
-                    '<td>' + esc(entry.adminId || '') + '</td>' +
-                    '<td><span class="badge b-constant">' + esc(entry.action) + '</span></td>' +
-                    '<td style="font-size:11px;color:var(--muted);word-break:break-all">' + esc(JSON.stringify(entry.details || {})) + '</td>' +
-                    '</tr>';
-            });
-            body.innerHTML = html + '</tbody></table></div>';
-        })
-        .catch(function (e) {
-            body.innerHTML = '<div class="obj-error">Failed to load audit log: ' + esc(e.message) + '</div>';
+    Promise.all([
+        fetch('/api/dis/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get-audit' })
+        }).then(function (r) { return r.json(); }).catch(function () { return { log: [] }; }),
+        fetch('/api/admin/audit', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : { log: [] }; })
+            .catch(function () { return { log: [] }; })
+    ]).then(function (results) {
+        var disLog   = (results[0].log || []).map(function (e) { return Object.assign({}, e, { _src: 'DIS' }); });
+        var adminLog = (results[1].log || []).map(function (e) { return Object.assign({}, e, { _src: 'ADM' }); });
+        var log = disLog.concat(adminLog).sort(function (a, b) {
+            return (b.timestamp || '').localeCompare(a.timestamp || '');
         });
+
+        if (log.length === 0) {
+            body.innerHTML = '<div class="empty">No audit log entries.</div>';
+            return;
+        }
+
+        // Badge color by source
+        var srcColors = { DIS: 'b-bronze', ADM: 'b-silver' };
+
+        var html = '<div class="tbl-wrap"><table>' +
+            '<thead><tr><th>Time</th><th>Admin</th><th>Source</th><th>Action</th><th>Details</th></tr></thead><tbody>';
+        log.forEach(function (entry) {
+            var srcClass = srcColors[entry._src] || 'b-constant';
+            html += '<tr>' +
+                '<td style="white-space:nowrap;font-size:11px">' + new Date(entry.timestamp).toLocaleString() + '</td>' +
+                '<td>' + esc(entry.adminId || '') + '</td>' +
+                '<td><span class="badge ' + srcClass + '">' + esc(entry._src) + '</span></td>' +
+                '<td><span class="badge b-constant">' + esc(entry.action) + '</span></td>' +
+                '<td style="font-size:11px;color:var(--muted);word-break:break-all">' + esc(JSON.stringify(entry.details || {})) + '</td>' +
+                '</tr>';
+        });
+        body.innerHTML = html + '</tbody></table></div>';
+    }).catch(function (e) {
+        body.innerHTML = '<div class="obj-error">Failed to load audit log: ' + esc(e.message) + '</div>';
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -64,7 +64,7 @@ window.AUTH = {
         var u = window.AUTH.user;
         if (u && u.divisionRank >= 246) return true;
         var p = window.AUTH.adminPerms;
-        return !!(p && (p.roleManager || p.disSync || p.disTiles || p.disPoints || p.disRaffle || p.disGamePool || p.disAudit || p.mfOfficers || p.mfRemote));
+        return !!(p && (p.roleAssign || p.roleEdit || p.disSync || p.disTiles || p.disPoints || p.disRaffle || p.disGamePool || p.disAudit || p.mfOfficers || p.mfRemote));
     },
     // Check if user can access a specific admin tab
     canAdminTab: function (tab) {
@@ -73,15 +73,14 @@ window.AUTH = {
         var p = window.AUTH.adminPerms;
         if (!p) return false;
         var map = {
-            roles:      'roleManager',
-            sync:       'disSync',
-            tiles:      'disTiles',
-            points:     'disPoints',
-            raffle:     'disRaffle',
-            gamepool:   'disGamePool',
-            audit:      'disAudit',
-            mainframe:  null   // mainframe tab visible if ANY mf perm is held
+            sync:      'disSync',
+            tiles:     'disTiles',
+            points:    'disPoints',
+            raffle:    'disRaffle',
+            gamepool:  'disGamePool',
+            audit:     'disAudit'
         };
+        if (tab === 'roles')     return !!(p.roleAssign || p.roleEdit);
         if (tab === 'mainframe') return !!(p.mfOfficers || p.mfRemote);
         return !!p[map[tab]];
     },

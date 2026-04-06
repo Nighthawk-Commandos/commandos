@@ -500,20 +500,21 @@ window._ADMIN = { tab: null, roles: [], list: [] };
 
 // Permission definitions (flat list — used for pill rendering and toggle lookup)
 var ADMIN_PERM_DEFS = [
-    { key: 'roleManager', label: 'Role Manager', superadminOnly: true  },
+    { key: 'roleAssign',  label: 'Assign Users', superadminOnly: true  },
+    { key: 'roleEdit',    label: 'Edit Roles',   superadminOnly: true  },
     { key: 'mfOfficers',  label: 'Officers',     superadminOnly: false },
-    { key: 'mfRemote',    label: 'Remote',        superadminOnly: false },
-    { key: 'disSync',     label: 'Sync',          superadminOnly: false },
-    { key: 'disTiles',    label: 'Tiles',         superadminOnly: false },
-    { key: 'disPoints',   label: 'Points',        superadminOnly: false },
-    { key: 'disRaffle',   label: 'Raffle',        superadminOnly: false },
-    { key: 'disGamePool', label: 'Game Pool',     superadminOnly: false },
-    { key: 'disAudit',    label: 'Audit',         superadminOnly: false }
+    { key: 'mfRemote',    label: 'Remote',       superadminOnly: false },
+    { key: 'disSync',     label: 'Sync',         superadminOnly: false },
+    { key: 'disTiles',    label: 'Tiles',        superadminOnly: false },
+    { key: 'disPoints',   label: 'Points',       superadminOnly: false },
+    { key: 'disRaffle',   label: 'Raffle',       superadminOnly: false },
+    { key: 'disGamePool', label: 'Game Pool',    superadminOnly: false },
+    { key: 'disAudit',    label: 'Audit',        superadminOnly: false }
 ];
 
 // Permission groups — used to render toggles in role create/edit forms
 var ADMIN_PERM_GROUPS = [
-    { label: 'System',    keys: ['roleManager'] },
+    { label: 'System',    keys: ['roleAssign', 'roleEdit'] },
     { label: 'Mainframe', keys: ['mfOfficers', 'mfRemote'] },
     { label: 'DIS',       keys: ['disSync', 'disTiles', 'disPoints', 'disRaffle', 'disGamePool', 'disAudit'] }
 ];
@@ -731,7 +732,8 @@ function _adminBuildRolesUI(body, roles, list) {
     window._ADMIN.list  = list;
     var ap = window.AUTH.adminPerms || {};
     var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
-    var canManage = isSuperadmin || !!ap.roleManager;
+    var canAssign    = isSuperadmin || !!ap.roleAssign;   // add/remove/reassign users
+    var canEditRoles = isSuperadmin || !!ap.roleEdit;     // create/edit/delete role templates
 
     var html = '';
 
@@ -741,10 +743,10 @@ function _adminBuildRolesUI(body, roles, list) {
     roles.forEach(function (role) {
         var enabledPerms = ADMIN_PERM_DEFS.filter(function (d) { return role.permissions && role.permissions[d.key]; });
         html += '<div class="admin-role-card" style="border-left-color:' + esc(role.color || '#7c4ab8') + '" id="admin-role-card-' + esc(role.id) + '">' +
-            _adminRoleCardViewHTML(role, enabledPerms, canManage) + '</div>';
+            _adminRoleCardViewHTML(role, enabledPerms, canEditRoles) + '</div>';
     });
 
-    if (canManage) {
+    if (canEditRoles) {
         html += '<div class="admin-role-card" style="border-left-color:var(--border)">' +
             '<div id="admin-new-role-collapsed">' +
             '<button class="btn-dis-primary" style="width:100%;font-size:12px" onclick="adminShowNewRole()">+ Create Role</button>' +
@@ -772,7 +774,7 @@ function _adminBuildRolesUI(body, roles, list) {
             html += '<div class="admin-user-row">' +
                 '<div class="admin-user-label">' + esc(e.label || e.discordId) + '</div>' +
                 '<div class="admin-user-id">' + esc(e.discordId) + '</div>';
-            if (canManage) {
+            if (canAssign) {
                 html += _adminRoleSelectHTML(roles, e.roleId || '', e.discordId) +
                     '<button class="admin-remove-btn" onclick="adminRemoveUser(\'' + esc(e.discordId) + '\')">Remove</button>';
             } else {
@@ -786,7 +788,7 @@ function _adminBuildRolesUI(body, roles, list) {
         html += '<div class="empty" style="margin-bottom:16px">No users on the admin list.</div>';
     }
 
-    if (canManage) {
+    if (canAssign) {
         html += '<div class="info-block" style="margin-top:12px"><h3>Add User</h3>' +
             '<div class="dis-inline-form" style="margin-bottom:10px">' +
             '<input id="admin-new-user-id" class="admin-input" placeholder="Discord ID" style="width:180px">' +
@@ -860,7 +862,7 @@ function adminCancelEditRole(id) {
     var ap = window.AUTH.adminPerms || {};
     var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
     var enabledPerms = ADMIN_PERM_DEFS.filter(function (d) { return role.permissions && role.permissions[d.key]; });
-    card.innerHTML = _adminRoleCardViewHTML(role, enabledPerms, isSuperadmin || !!ap.roleManager);
+    card.innerHTML = _adminRoleCardViewHTML(role, enabledPerms, isSuperadmin || !!ap.roleEdit);
 }
 
 function adminSaveRole(id) {

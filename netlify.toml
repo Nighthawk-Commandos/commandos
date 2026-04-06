@@ -43,6 +43,11 @@ from   = "/api/admin/perms"
 to     = "/.netlify/functions/admin-perms"
 status = 200
 
+[[redirects]]
+from   = "/api/admin/audit"
+to     = "/.netlify/functions/admin-audit"
+status = 200
+
 # ── Callback API redirects ──────────────────────────────────────
 [[redirects]]
 from   = "/api/callback/review"
@@ -88,19 +93,14 @@ for = "/index.html"
 Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
-for = "/config.js"
+for = "/js/*"
 [headers.values]
-Cache-Control = "no-cache, no-store, must-revalidate"
+Cache-Control = "no-cache, must-revalidate"
 
 [[headers]]
-for = "/*.js"
+for = "/css/*"
 [headers.values]
-Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
-
-[[headers]]
-for = "/*.css"
-[headers.values]
-Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+Cache-Control = "no-cache, must-revalidate"
 
 # ── Security headers ───────────────────────────────────────────
 # 'unsafe-inline' is required because dynamic HTML strings in render.js / forms.js

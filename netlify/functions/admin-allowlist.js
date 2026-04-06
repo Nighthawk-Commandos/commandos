@@ -8,14 +8,14 @@
 // ═══════════════════════════════════════════════════════════════
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, ALL_PERMS, json } = require('./_shared');
+const { blobsStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit } = require('./_shared');
 
 // Clamp requested permissions to what the actor is allowed to grant.
 // Only superadmin can grant roleManager.
 function sanitizePerms(requested, actorPerms) {
     const out = {};
     ALL_PERMS.forEach(k => {
-        if (k === 'roleManager') {
+        if (k === 'roleAssign' || k === 'roleEdit') {
             out[k] = !!(actorPerms.superadmin && requested && requested[k]);
         } else {
             out[k] = !!(actorPerms[k] && requested && requested[k]);
@@ -57,8 +57,8 @@ exports.handler = async function (event) {
 
     // ── POST (add entry) ─────────────────────────────────────────
     if (method === 'POST') {
-        if (!actorPerms.superadmin && !actorPerms.roleManager) {
-            return json(403, { error: 'Requires roleManager permission' });
+        if (!actorPerms.superadmin && !actorPerms.roleAssign) {
+            return json(403, { error: 'Requires roleAssign permission' });
         }
 
         let body;
@@ -76,14 +76,16 @@ exports.handler = async function (event) {
         if (!list.some(e => e.discordId === discordId)) {
             list.push(entry);
             await store.set('allowlist', JSON.stringify(list));
+            const adminId = session.robloxUsername || session.discordId;
+            await addAdminAudit(store, adminId, 'ALLOWLIST_ADD', { discordId, label: entry.label, roleId: entry.roleId });
         }
         return json(200, { success: true, list });
     }
 
     // ── PATCH (update role or permissions of existing entry) ─────
     if (method === 'PATCH') {
-        if (!actorPerms.superadmin && !actorPerms.roleManager) {
-            return json(403, { error: 'Requires roleManager permission' });
+        if (!actorPerms.superadmin && !actorPerms.roleAssign) {
+            return json(403, { error: 'Requires roleAssign permission' });
         }
 
         let body;
@@ -95,34 +97,36 @@ exports.handler = async function (event) {
         if (idx === -1) return json(404, { error: 'Entry not found' });
 
         const current = list[idx];
+        let auditDetails = { discordId };
 
         if (roleId !== undefined) {
-            // Assigning or changing role
             if (roleId) {
                 list[idx] = Object.assign({}, current, { roleId, permissions: undefined });
                 delete list[idx].permissions;
             } else {
-                // Clearing role → fall back to direct permissions (all false)
                 list[idx] = Object.assign({}, current, { permissions: {} });
                 delete list[idx].roleId;
             }
+            auditDetails.roleId = roleId || null;
         } else if (permissions !== undefined) {
-            // Direct permission edit — check actor can modify this entry
             if (!isSubset(current.permissions, actorPerms)) {
                 return json(403, { error: 'Cannot edit a user with higher permissions than you' });
             }
             list[idx] = Object.assign({}, current, { permissions: sanitizePerms(permissions, actorPerms) });
             delete list[idx].roleId;
+            auditDetails.permissions = list[idx].permissions;
         }
 
         await store.set('allowlist', JSON.stringify(list));
+        const adminId = session.robloxUsername || session.discordId;
+        await addAdminAudit(store, adminId, 'ALLOWLIST_UPDATE', auditDetails);
         return json(200, { success: true, list });
     }
 
     // ── DELETE ───────────────────────────────────────────────────
     if (method === 'DELETE') {
-        if (!actorPerms.superadmin && !actorPerms.roleManager) {
-            return json(403, { error: 'Requires roleManager permission' });
+        if (!actorPerms.superadmin && !actorPerms.roleAssign) {
+            return json(403, { error: 'Requires roleAssign permission' });
         }
 
         let body;
@@ -130,7 +134,6 @@ exports.handler = async function (event) {
         const { discordId } = body;
         if (!discordId) return json(400, { error: 'discordId required' });
 
-        // Can only remove entries whose perms are a subset of actor's perms
         const target = list.find(e => e.discordId === discordId);
         if (target && !isSubset(target.permissions, actorPerms)) {
             return json(403, { error: 'Cannot remove a user with higher permissions than you' });
@@ -138,6 +141,8 @@ exports.handler = async function (event) {
 
         list = list.filter(e => e.discordId !== discordId);
         await store.set('allowlist', JSON.stringify(list));
+        const adminId = session.robloxUsername || session.discordId;
+        await addAdminAudit(store, adminId, 'ALLOWLIST_REMOVE', { discordId, label: target ? target.label : discordId });
         return json(200, { success: true, list });
     }
 

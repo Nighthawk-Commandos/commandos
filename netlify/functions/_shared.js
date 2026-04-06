@@ -49,7 +49,7 @@ async function requireAdmin(session) {
 // ── Granular permission check ────────────────────────────────────
 // Returns full permissions object for the session user.
 // Superadmin (rank 246+) always has all perms.
-const ALL_PERMS = ['roleManager','disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit','mfOfficers','mfRemote'];
+const ALL_PERMS = ['roleAssign','roleEdit','disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit','mfOfficers','mfRemote'];
 
 async function getUserAdminPerms(session, adminStore) {
     if (!session) return null;
@@ -107,4 +107,15 @@ async function invalidateCache(store) {
     try { await store.set('state-cache', ''); } catch {}
 }
 
-module.exports = { blobsStore, verifySession, requireAdmin, getUserAdminPerms, requirePerm, ALL_PERMS, json, getCurrentWeekNumber, invalidateCache };
+// ── Admin audit log ─────────────────────────────────────────────
+// Appends an entry to commandos-admin/audit. Keeps last 500 entries.
+async function addAdminAudit(adminStore, adminId, action, details) {
+    let log;
+    try { log = await adminStore.get('audit', { type: 'json' }); } catch {}
+    log = Array.isArray(log) ? log : [];
+    log.push({ adminId, action, details, timestamp: new Date().toISOString() });
+    if (log.length > 500) log = log.slice(-500);
+    await adminStore.set('audit', JSON.stringify(log));
+}
+
+module.exports = { blobsStore, verifySession, requireAdmin, getUserAdminPerms, requirePerm, ALL_PERMS, json, getCurrentWeekNumber, invalidateCache, addAdminAudit };
