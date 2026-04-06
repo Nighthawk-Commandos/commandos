@@ -30,25 +30,25 @@ from   = "/api/admin/allowlist"
 to     = "/.netlify/functions/admin-allowlist"
 status = 200
 
-# ── Bingo API redirects ─────────────────────────────────────────
+# ── DIS API redirects ───────────────────────────────────────────
 [[redirects]]
-from   = "/api/bingo/board"
-to     = "/.netlify/functions/bingo-board"
+from   = "/api/dis/state"
+to     = "/.netlify/functions/dis-state"
 status = 200
 
 [[redirects]]
-from   = "/api/bingo/progress"
-to     = "/.netlify/functions/bingo-progress"
+from   = "/api/dis/sync"
+to     = "/.netlify/functions/dis-sync"
 status = 200
 
 [[redirects]]
-from   = "/api/bingo/leaderboard"
-to     = "/.netlify/functions/bingo-leaderboard"
+from   = "/api/dis/admin"
+to     = "/.netlify/functions/dis-admin"
 status = 200
 
 [[redirects]]
-from   = "/api/bingo/admin"
-to     = "/.netlify/functions/bingo-admin"
+from   = "/api/dis/gamepool"
+to     = "/.netlify/functions/dis-gamepool"
 status = 200
 
 # ── SPA fallback ───────────────────────────────────────────────

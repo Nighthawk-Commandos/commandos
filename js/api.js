@@ -11,8 +11,8 @@ var API = (function () {
     // ── Config ──────────────────────────────────────────────────
     // Set SCRIPT_URL in config.js (not committed to source control).
     var URL        = window.SCRIPT_URL || '';
-    var CACHE_TTL  = 5 * 60 * 1000;   // 5 min for main data
-    var MEMBER_TTL = 10 * 60 * 1000;  // 10 min for member list
+    var CACHE_TTL  = 60 * 60 * 1000;  // 1 hour for main data (shared globally, not per-user)
+    var MEMBER_TTL = 60 * 60 * 1000;  // 1 hour for member list
 
     // ── In-memory fallback (survives page session, faster than LS)
     var _mem = {};

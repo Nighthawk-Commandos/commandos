@@ -35,22 +35,13 @@ var HOME_SECTIONS = [
         lockMsg:  'Requires rank 243 (Officer) or above.'
     },
     {
-        id:       'bingo',
-        tag:      'BNG',
-        tagColor: '#7c4ab8',
-        title:    'Officer Bingo System',
-        desc:     'Host incentive programme — complete the weekly tactical grid to earn raffle entries.',
-        accessFn: function () { return window.AUTH.canSubmitOfficerForms(); },
-        lockMsg:  'Requires rank 235 (Officer) or above.'
-    },
-    {
         id:       'deployment',
         tag:      'DIS',
-        tagColor: '#4a9c72',
+        tagColor: '#7c4ab8',
         title:    'Deployment Incentive System',
-        desc:     'Review and manage deployment incentives and mission rewards.',
-        accessFn: function () { return window.AUTH.canAccessHigherSections(); },
-        lockMsg:  'Requires rank 243 (Officer) or above.'
+        desc:     'Competitive lock-out deployment grid — claim tiles by hosting events, earn raffle entries.',
+        accessFn: function () { return window.AUTH.canSubmitOfficerForms(); },
+        lockMsg:  'Requires rank 235 (Officer) or above.'
     }
     // ── Add new sections here ──────────────────────────────────
     // {
@@ -110,13 +101,9 @@ function renderHomeScreen() {
 // ── Section enter ─────────────────────────────────────────────
 function enterSection(el) {
     var section = el && el.dataset ? el.dataset.section : el;
-    if (section === 'mainframe')       { enterMainframe(); }
+    if (section === 'mainframe')           { enterMainframe(); }
     else if (section === 'div-objectives') { enterObjectives(); }
-    else if (section === 'bingo')      { enterBingo(); }
-    else if (section === 'deployment') {
-        renderSectionPlaceholder('Deployment Incentive System',
-            'This section is under construction. Check back soon.');
-    }
+    else if (section === 'deployment')     { enterDIS(); }
 }
 
 function enterMainframe() {
@@ -130,8 +117,8 @@ function enterObjectives() {
     renderObjectivesSection();
 }
 
-function enterBingo() {
-    renderBingoSection();
+function enterDIS() {
+    renderDISSection();
 }
 
 function renderSectionPlaceholder(title, msg) {
@@ -151,8 +138,23 @@ function renderSectionPlaceholder(title, msg) {
         '</div>';
 }
 
-function showHomeScreen() { renderHomeScreen(); }
-function doLogout()       { window.AUTH.logout(); }
+function showHomeScreen() {
+    // Stop DIS polling if running
+    if (typeof disLeave === 'function') disLeave();
+    // Remove objectives layout mode
+    var hs = document.getElementById('home-screen');
+    if (hs) hs.classList.remove('obj-mode');
+    // If mainframe was showing, swap back to home screen
+    var appEl = document.getElementById('app');
+    if (appEl && !appEl.classList.contains('hidden')) {
+        appEl.classList.add('hidden');
+        var hbg = document.getElementById('hbg');
+        if (hbg) hbg.style.display = 'none';
+        if (hs) hs.classList.remove('hidden');
+    }
+    renderHomeScreen();
+}
+function doLogout() { window.AUTH.logout(); }
 
 // ── Navigation (mainframe pages) ─────────────────────────────
 var PAGES = {

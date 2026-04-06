@@ -1,135 +1,283 @@
 // ═══════════════════════════════════════════════════════════════
 //  objectives.js — Division Objectives section
+//  Replicates the original Apps Script HTML design:
+//  sidebar nav + overview + per-department task cards
 // ═══════════════════════════════════════════════════════════════
 
 'use strict';
 
-// ── Render entry point (called from app.js enterObjectives) ───
+// ── Cache (1 hour, stored in localStorage) ───────────────────
+var _OBJ_CACHE_KEY = 'obj:data';
+var _OBJ_CACHE_TTL = 60 * 60 * 1000;
+var _objMemCache   = null;
+var _objMemExp     = 0;
+var _objData       = null;    // loaded data
+var _objView       = 'overview'; // 'overview' | dept name
+
+// ── Entry point ───────────────────────────────────────────────
 function renderObjectivesSection() {
+    _objView = 'overview';
     var hs = document.getElementById('home-screen');
     if (!hs) return;
 
-    hs.innerHTML =
-        '<div class="bg-grid"></div>' +
-        '<div class="home-inner" style="padding-top:48px">' +
-        '<div class="obj-wrap">' +
-        '<div class="obj-back-row">' +
-        '<button class="btn-ghost" style="font-size:11px" data-click="showHomeScreen">&#8592; Hub</button>' +
-        '<span class="obj-month" style="margin-bottom:0">DIVISION OBJECTIVES</span>' +
-        '</div>' +
-        '<div class="obj-loading" id="obj-loading">Loading objectives data&#8230;</div>' +
-        '<div id="obj-content" style="display:none"></div>' +
-        '</div>' +
-        '</div>';
+    hs.classList.add('obj-mode');
+    hs.innerHTML = _objShellHTML();
 
+    var cached = _objCacheGet();
+    if (cached) {
+        _objData = cached;
+        _objBuildNav();
+        _objRenderOverview();
+    } else {
+        _objFetch();
+    }
+}
+
+function _objShellHTML() {
+    return '' +
+        '<div class="bg-grid"></div>' +
+        '<aside class="obj-sidebar" id="obj-sidebar">' +
+        '  <div class="obj-sidebar-logo">' +
+        '    <div class="obj-sidebar-label">TNI Commandos</div>' +
+        '    <div class="obj-sidebar-title">TNI:C<br>Objectives</div>' +
+        '  </div>' +
+        '  <div class="obj-sidebar-back">' +
+        '    <button class="obj-hub-btn" data-click="showHomeScreen">&#8592; Hub</button>' +
+        '  </div>' +
+        '  <nav class="obj-nav" id="obj-nav">' +
+        '    <div class="obj-nav-group">Overview</div>' +
+        '    <div class="obj-nav-item active" data-objkey="overview" data-click="objGo">'+
+        '      <span class="obj-nav-dot"></span>All Objectives' +
+        '    </div>' +
+        '    <div class="obj-nav-group">Departments</div>' +
+        '  </nav>' +
+        '</aside>' +
+        '<main class="obj-main" id="obj-main">' +
+        '  <div id="obj-content"><div class="obj-load-state">Loading objectives&#8230;</div></div>' +
+        '</main>';
+}
+
+// ── Data fetch + cache ────────────────────────────────────────
+function _objFetch() {
     var url = window.OBJECTIVES_URL;
     if (!url || url.indexOf('YOUR_') !== -1) {
-        _objError('OBJECTIVES_URL is not configured in config.js');
+        _objSetContent('<div class="empty-state">OBJECTIVES_URL not configured in config.js.</div>');
         return;
     }
-
     fetch(url + '?action=api', { redirect: 'follow' })
-        .then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (json) {
             if (!json.success) throw new Error(json.error || 'Unknown error');
-            _objRender(json.data);
+            _objData = json.data;
+            _objCacheSet(json.data);
+            _objBuildNav();
+            _objRenderOverview();
         })
         .catch(function (e) {
-            _objError('Failed to load objectives: ' + e.message);
+            _objSetContent('<div class="empty-state" style="color:var(--red)">Failed to load objectives: ' + esc(e.message) + '</div>');
         });
 }
 
-// ── Render objectives data ─────────────────────────────────────
-function _objRender(data) {
-    var loading = document.getElementById('obj-loading');
-    var content = document.getElementById('obj-content');
-    if (!loading || !content) return;
-    loading.style.display = 'none';
-    content.style.display = '';
+function _objCacheGet() {
+    if (_objMemCache && Date.now() < _objMemExp) return _objMemCache;
+    try {
+        var raw = localStorage.getItem(_OBJ_CACHE_KEY);
+        if (!raw) return null;
+        var obj = JSON.parse(raw);
+        if (Date.now() > obj.exp) { localStorage.removeItem(_OBJ_CACHE_KEY); return null; }
+        _objMemCache = obj.data; _objMemExp = obj.exp;
+        return obj.data;
+    } catch (_) { return null; }
+}
 
-    var depts = data.departments || [];
-    var month = data.month || '';
+function _objCacheSet(data) {
+    _objMemCache = data; _objMemExp = Date.now() + _OBJ_CACHE_TTL;
+    try { localStorage.setItem(_OBJ_CACHE_KEY, JSON.stringify({ data: data, exp: _objMemExp })); } catch (_) {}
+}
 
-    var totalObj = 0, doneObj = 0;
-    depts.forEach(function (d) {
-        (d.objectives || []).forEach(function (o) {
-            totalObj++;
-            if (o.completed) doneObj++;
-        });
+// ── Build sidebar nav ─────────────────────────────────────────
+function _objBuildNav() {
+    var nav = document.getElementById('obj-nav');
+    if (!nav || !_objData || !_objData.divisions) return;
+    _objData.divisions.forEach(function (dept) {
+        var el = document.createElement('div');
+        el.className = 'obj-nav-item';
+        el.setAttribute('data-objkey', dept.name);
+        el.setAttribute('data-click', 'objGo');
+        el.innerHTML = '<span class="obj-nav-dot"></span>' + esc(dept.name);
+        nav.appendChild(el);
     });
-
-    var pct = totalObj > 0 ? Math.round((doneObj / totalObj) * 100) : 0;
-
-    var html =
-        '<div class="obj-header">' +
-        '<div class="obj-header-left">' +
-        '<div class="obj-month">' + esc(month) + '</div>' +
-        '<div class="obj-title">Division Objectives</div>' +
-        '</div>' +
-        '<div style="text-align:right">' +
-        '<div style="font-family:\'Syne\',sans-serif;font-size:28px;font-weight:800;color:var(--accent2);line-height:1">' + pct + '%</div>' +
-        '<div style="font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:3px">' + doneObj + ' / ' + totalObj + ' complete</div>' +
-        '</div>' +
-        '</div>';
-
-    // Division-wide objectives (if any)
-    if (data.divisionObjectives && data.divisionObjectives.length > 0) {
-        html += '<div class="obj-dept-card" style="margin-bottom:16px">' +
-            '<div class="obj-dept-head">' +
-            '<div class="obj-dept-dot" style="background:var(--accent)"></div>' +
-            '<div class="obj-dept-name" style="color:var(--accent2)">Division-Wide</div>' +
-            '<div class="obj-dept-prog">' + _objProgress(data.divisionObjectives) + '</div>' +
-            '</div>' +
-            '<div class="obj-list">' + _objItems(data.divisionObjectives) + '</div>' +
-            '</div>';
-    }
-
-    html += '<div class="obj-grid">';
-    depts.forEach(function (dept) {
-        var objs = dept.objectives || [];
-        var color = dept.color || 'var(--accent)';
-        html +=
-            '<div class="obj-dept-card">' +
-            '<div class="obj-dept-head">' +
-            '<div class="obj-dept-dot" style="background:' + esc(color) + '"></div>' +
-            '<div class="obj-dept-name" style="color:' + esc(color) + '">' + esc(dept.name) + '</div>' +
-            '<div class="obj-dept-prog">' + _objProgress(objs) + '</div>' +
-            '</div>' +
-            '<div class="obj-list">' + _objItems(objs) + '</div>' +
-            '</div>';
-    });
-    html += '</div>';
-
-    content.innerHTML = html;
 }
 
-function _objProgress(objectives) {
-    var done = (objectives || []).filter(function (o) { return o.completed; }).length;
-    return done + ' / ' + (objectives || []).length;
+// ── Navigation ────────────────────────────────────────────────
+function objGo(el) {
+    var key = el && el.dataset ? el.dataset.objkey : el;
+    document.querySelectorAll('.obj-nav-item').forEach(function (n) { n.classList.remove('active'); });
+    if (el && el.classList) el.classList.add('active');
+    var mainEl = document.getElementById('obj-main');
+    if (mainEl) mainEl.scrollTop = 0;
+    _objView = key;
+    if (key === 'overview') {
+        _objRenderOverview();
+    } else if (_objData) {
+        var dept = (_objData.divisions || []).find(function (d) { return d.name === key; });
+        if (dept) _objRenderDept(dept);
+    }
 }
 
-function _objItems(objectives) {
-    if (!objectives || objectives.length === 0) {
-        return '<div class="obj-item"><span style="color:var(--muted);font-size:11px">No objectives set.</span></div>';
+// ── Overview ──────────────────────────────────────────────────
+function _objRenderOverview() {
+    if (!_objData) return;
+    var c = _objData.commandos || {};
+    var allTasks = [];
+    (_objData.divisions || []).forEach(function (d) { allTasks = allTasks.concat(d.tasks || []); });
+
+    var inProg   = allTasks.filter(function (t) { return _normSt(t.status) === 'progress'; }).length;
+    var notSt    = allTasks.filter(function (t) { return _normSt(t.status) === 'not'; }).length;
+    var launched = allTasks.filter(function (t) { return _normSt(t.status) === 'launched'; }).length;
+    var highest  = allTasks.filter(function (t) { return (t.priority || '').toLowerCase() === 'highest'; }).length;
+
+    var h = '';
+    h += '<div class="page-header">';
+    h += '<div class="eyebrow">Nighthawk Commandos \u2014 ' + esc(_objData.month || 'Monthly') + '</div>';
+    h += '<h1>TNIC Objectives</h1>';
+    h += '<div class="page-meta">';
+    if (c.director) h += _chip('Director', c.director);
+    if (c.deputies) h += _chip('Deputy Director(s)', c.deputies);
+    if (c.advisors)  h += _chip('Advisors', c.advisors);
+    h += '</div></div>';
+
+    h += '<div class="summary-bar">';
+    h += _stat(allTasks.length, 'Total Tasks');
+    h += _stat(inProg,   'In Progress');
+    h += _stat(notSt,    'Not Started');
+    h += _stat(launched, 'Launched');
+    h += _stat(highest,  'Highest Priority');
+    h += '</div>';
+
+    h += '<div class="section-label">Monthly Directives</div>';
+    var cmTasks = c.tasks || [];
+    if (cmTasks.length === 0) {
+        h += '<div class="empty-state">No monthly directives found.</div>';
+    } else {
+        h += '<div class="tasks-grid">';
+        cmTasks.forEach(function (t, i) { h += _taskCard(t, i, true); });
+        h += '</div>';
     }
-    return objectives.map(function (o) {
-        var done = !!o.completed;
-        return '<div class="obj-item">' +
-            '<div class="obj-check' + (done ? ' done' : '') + '"></div>' +
-            '<div class="obj-item-text' + (done ? ' done' : '') + '">' + esc(o.text) + '</div>' +
-            '</div>';
-    }).join('');
+
+    h += '<hr class="obj-divider">';
+    h += '<div class="section-label">Departments</div>';
+    h += '<div class="tasks-grid">';
+    (_objData.divisions || []).forEach(function (dept) { h += _deptCard(dept); });
+    h += '</div>';
+
+    _objSetContent(h);
 }
 
-function _objError(msg) {
-    var loading = document.getElementById('obj-loading');
-    if (loading) loading.style.display = 'none';
-    var content = document.getElementById('obj-content');
-    if (content) {
-        content.style.display = '';
-        content.innerHTML = '<div class="obj-error">' + esc(msg) + '</div>';
+// ── Department page ───────────────────────────────────────────
+function _objRenderDept(dept) {
+    var tasks    = dept.tasks || [];
+    var inProg   = tasks.filter(function (t) { return _normSt(t.status) === 'progress'; }).length;
+    var notSt    = tasks.filter(function (t) { return _normSt(t.status) === 'not'; }).length;
+    var launched = tasks.filter(function (t) { return _normSt(t.status) === 'launched'; }).length;
+    var highest  = tasks.filter(function (t) { return (t.priority || '').toLowerCase() === 'highest'; }).length;
+
+    var h = '';
+    h += '<div class="page-header">';
+    h += '<div class="eyebrow">Department Objectives</div>';
+    h += '<h1>' + esc(dept.name) + '</h1>';
+    h += '<div class="page-meta">';
+    if (dept.overseer)      h += _chip('Overseer', dept.overseer);
+    if (dept.adminOverseer) h += _chip('Admin Overseer', dept.adminOverseer);
+    h += '</div></div>';
+
+    h += '<div class="summary-bar">';
+    h += _stat(tasks.length, 'Tasks');
+    h += _stat(inProg,   'In Progress');
+    h += _stat(notSt,    'Not Started');
+    h += _stat(launched, 'Launched');
+    h += _stat(highest,  'Highest Priority');
+    h += '</div>';
+
+    h += '<div class="section-label">Tasks</div>';
+    if (tasks.length === 0) {
+        h += '<div class="empty-state">No tasks assigned.</div>';
+    } else {
+        h += '<div class="tasks-grid">';
+        tasks.forEach(function (t, i) { h += _taskCard(t, i, false); });
+        h += '</div>';
     }
+    _objSetContent(h);
+}
+
+// ── Department summary card ───────────────────────────────────
+function _deptCard(dept) {
+    var tasks    = dept.tasks || [];
+    var inProg   = tasks.filter(function (t) { return _normSt(t.status) === 'progress'; }).length;
+    var notSt    = tasks.filter(function (t) { return _normSt(t.status) === 'not'; }).length;
+    var launched = tasks.filter(function (t) { return _normSt(t.status) === 'launched'; }).length;
+
+    var h = '<div class="dept-card" data-objkey="' + esc(dept.name) + '" data-click="objGo">';
+    h += '<div>';
+    h += '<div class="dept-card-name">' + esc(dept.name) + '</div>';
+    h += '<div class="dept-card-sub">Overseer: <span>' + esc(dept.overseer || 'VACANT') + '</span></div>';
+    h += '</div>';
+    h += '<div class="dept-badges">';
+    if (tasks.length === 0) {
+        h += _badge('No tasks', 's-not');
+    } else {
+        if (inProg)   h += _badge(inProg + ' In Progress', 's-progress');
+        if (notSt)    h += _badge(notSt + ' Not Started', 's-not');
+        if (launched) h += _badge(launched + ' Launched', 's-launched');
+    }
+    h += '</div></div>';
+    return h;
+}
+
+// ── Task card ─────────────────────────────────────────────────
+function _taskCard(t, idx, isCmdo) {
+    var pClass = 'p-' + (t.priority || 'low').toLowerCase().replace(/\s+/g, '');
+    var sClass = _normSt(t.status) === 'progress' ? 's-progress' : _normSt(t.status) === 'launched' ? 's-launched' : 's-not';
+
+    var h = '<div class="task-card">';
+    h += '<div>';
+    h += '<div class="task-text">' + esc(t.task) + '</div>';
+    h += '<div class="task-footer">';
+    if (t.date) h += '<span class="task-date">' + esc(t.date) + '</span>';
+    if (isCmdo && t.department) h += '<span class="task-tag">' + esc(t.department) + '</span>';
+    if (!isCmdo && t.notes && t.notes.trim()) h += '<span class="task-tag">' + esc(t.notes) + '</span>';
+    h += '</div></div>';
+    h += '<div class="task-badges">';
+    if (t.priority) h += _badge(t.priority, pClass);
+    if (t.status)   h += _badge(t.status, sClass);
+    if (!isCmdo && t.size) h += '<span class="size-badge">' + esc(t.size) + '</span>';
+    h += '</div></div>';
+    return h;
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function _objSetContent(html) {
+    var el = document.getElementById('obj-content');
+    if (el) el.innerHTML = html;
+}
+
+function _normSt(s) {
+    if (!s) return 'not';
+    var l = s.toLowerCase();
+    if (l.indexOf('progress') !== -1) return 'progress';
+    if (l.indexOf('launch') !== -1 || l.indexOf('complete') !== -1) return 'launched';
+    return 'not';
+}
+
+function _chip(label, val) {
+    if (!val) return '';
+    return '<div class="meta-chip"><span>' + esc(label) + ':&nbsp;</span><strong>' + esc(val) + '</strong></div>';
+}
+
+function _stat(n, label) {
+    return '<div class="stat-card"><div class="num">' + n + '</div><div class="lbl">' + esc(label) + '</div></div>';
+}
+
+function _badge(text, cls) {
+    return '<span class="badge ' + cls + '">' + esc(String(text)) + '</span>';
 }
