@@ -8,34 +8,65 @@
 
 // ── Module state ──────────────────────────────────────────────
 var _DIS = {
-    state:    null,       // { tiles, globalMultiplier, weekNumber, leaderboard, stats, lastSyncAt }
-    gamepool: null,       // [{ gameId, name, eventTypes }]
-    view:     'board',    // 'board' | 'lb' | 'raffle' | 'admin'
-    adminTab: 'sync',     // 'sync' | 'tiles' | 'points' | 'raffle' | 'gamepool' | 'audit'
-    poll:     null,
-    loading:  false
+    state:     null,       // { tiles, globalMultiplier, weekNumber, leaderboard, stats, lastSyncAt }
+    stateHash: null,       // JSON fingerprint of last rendered state
+    gamepool:  null,       // [{ gameId, name, eventTypes }]
+    view:      'board',    // 'board' | 'lb' | 'raffle' | 'admin'
+    adminTab:  'sync',     // 'sync' | 'tiles' | 'points' | 'raffle' | 'gamepool' | 'audit'
+    poll:      null,
+    loading:   false
 };
 
 // ── Entry point ───────────────────────────────────────────────
 function renderDISSection() {
     _DIS.view = 'board';
     _DIS.adminTab = 'sync';
+    _DIS.stateHash = null; // force full render on first load
     _disPaint();
     _disLoad(true);
     _disStartPoll();
+    _disStartVisibilityWatch();
 }
 
 // Called when leaving the DIS section
-function disLeave() { _disStopPoll(); }
+function disLeave() {
+    _disStopPoll();
+    _disStopVisibilityWatch();
+}
 
 // ── Polling ───────────────────────────────────────────────────
 function _disStartPoll() {
     _disStopPoll();
-    _DIS.poll = setInterval(function () { _disLoad(false); }, 15000);
+    _DIS.poll = setInterval(function () { _disLoad(false); }, 60000);
 }
 
 function _disStopPoll() {
     if (_DIS.poll) { clearInterval(_DIS.poll); _DIS.poll = null; }
+}
+
+// ── Visibility watch — pause poll when tab is hidden ──────────
+// Saves requests when users have the tab open but aren't looking at it.
+// On return, refreshes immediately then restarts the 60s interval.
+var _disVisHandler = null;
+
+function _disStartVisibilityWatch() {
+    _disStopVisibilityWatch();
+    _disVisHandler = function () {
+        if (document.hidden) {
+            _disStopPoll();
+        } else {
+            _disLoad(false);   // immediate refresh on return
+            _disStartPoll();
+        }
+    };
+    document.addEventListener('visibilitychange', _disVisHandler);
+}
+
+function _disStopVisibilityWatch() {
+    if (_disVisHandler) {
+        document.removeEventListener('visibilitychange', _disVisHandler);
+        _disVisHandler = null;
+    }
 }
 
 // ── Load state from server ────────────────────────────────────
@@ -46,9 +77,18 @@ function _disLoad(showSpinner) {
         .then(function (r) { return r.json(); })
         .then(function (data) {
             _DIS.loading = false;
+            var newHash = JSON.stringify(data);
+            var unchanged = newHash === _DIS.stateHash;
             _DIS.state = data;
-            // Don't re-render while user is editing in the admin panel
-            if (_DIS.view !== 'admin') _disRenderView();
+            if (_DIS.view === 'admin') return; // never clobber admin inputs
+            if (unchanged) return;             // nothing changed, skip re-render
+            _DIS.stateHash = newHash;
+            // Partial update for board view; full re-render for leaderboard/raffle
+            if (_DIS.view === 'board' && document.getElementById('dis-body')) {
+                _disSmartUpdateBoard();
+            } else {
+                _disRenderView();
+            }
         })
         .catch(function (e) {
             _DIS.loading = false;
@@ -96,6 +136,75 @@ function _disRenderView() {
     if (_DIS.view === 'raffle') return _disRenderRaffle();
     if (_DIS.view === 'admin') return _disRenderAdmin();
     return _disRenderBoard();
+}
+
+// ── Smart partial board update (poll only) ────────────────────
+// Updates stat numbers, sync note, and only tiles that changed state.
+// Never rebuilds the entire grid so scroll position and layout are preserved.
+function _disSmartUpdateBoard() {
+    var body = document.getElementById('dis-body');
+    if (!body) { _disRenderBoard(); return; }
+
+    // If the grid doesn't exist yet, do a full render
+    var grid = body.querySelector('.dis-grid');
+    if (!grid) { _disRenderBoard(); return; }
+
+    var st    = _DIS.state || {};
+    var tiles = st.tiles || [];
+    var gm    = st.globalMultiplier || 1;
+    var claimed = tiles.filter(function (t) { return t.completed; }).length;
+    var avail   = tiles.filter(function (t) { return !t.completed && !t.lockedByAdmin; }).length;
+    var locked  = 25 - claimed - avail;
+
+    // Update stat numbers in-place
+    var statNums = body.querySelectorAll('.bingo-stat-num');
+    if (statNums.length >= 4) {
+        statNums[0].textContent = claimed;
+        statNums[1].textContent = avail;
+        statNums[2].textContent = locked;
+        statNums[3].textContent = gm + (gm !== 1 ? 'x' : '');
+    }
+
+    // Update or insert sync note
+    var syncNote = body.querySelector('.dis-sync-note');
+    if (st.lastSyncAt) {
+        var noteText = 'Last synced: ' + new Date(st.lastSyncAt).toLocaleString();
+        if (syncNote) {
+            syncNote.textContent = noteText;
+        } else {
+            var note = document.createElement('div');
+            note.className = 'dis-sync-note';
+            note.textContent = noteText;
+            grid.parentNode.insertBefore(note, grid);
+        }
+    }
+
+    // Update only tiles whose state changed
+    var tileDivs = grid.querySelectorAll('.dis-tile');
+    tiles.forEach(function (tile, i) {
+        var el = tileDivs[i];
+        if (!el) return;
+
+        var pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
+        var wantCls = 'dis-tile' + (tile.completed ? ' dis-tile-claimed' : tile.lockedByAdmin ? ' dis-tile-locked' : '');
+
+        // Only rebuild the tile if its CSS class changed (i.e. status changed)
+        if (el.className !== wantCls) {
+            el.className = wantCls;
+            var inner =
+                '<div class="dis-tile-type">' + esc(tile.eventType) + '</div>' +
+                '<div class="dis-tile-game">' + esc(tile.gameName || (tile.gameId ? 'Game ' + tile.gameId : '?')) + '</div>';
+            if (tile.completed) {
+                inner += '<div class="dis-tile-claimer">' + esc(tile.completedBy || '') + '</div>' +
+                    '<div class="dis-status-badge dis-badge-claimed">CLAIMED</div>';
+            } else if (tile.lockedByAdmin) {
+                inner += '<div class="dis-status-badge dis-badge-locked">LOCKED</div>';
+            } else if (tile.multiplier > 1 || gm > 1) {
+                inner += '<div class="dis-tile-pts">' + pts + 'pt' + (pts !== 1 ? 's' : '') + '</div>';
+            }
+            el.innerHTML = inner;
+        }
+    });
 }
 
 // ── Board view ────────────────────────────────────────────────
@@ -318,33 +427,37 @@ function _disAdminTiles(body) {
     }
 
     html += '<div class="tbl-wrap"><table>' +
-        '<thead><tr><th>#</th><th>Event Type</th><th>Game</th><th>Status</th><th>Claimed By</th><th>Pts</th><th style="text-align:right">Actions</th></tr></thead>' +
+        '<thead><tr><th>#</th><th>Event Type</th><th>Game</th><th>Status</th><th>Claimed By</th><th>Base Pts</th><th style="text-align:right">Actions</th></tr></thead>' +
         '<tbody>';
 
     tiles.forEach(function (tile) {
-        var status = tile.completed ? 'Claimed' : tile.lockedByAdmin ? 'Locked' : 'Available';
+        var status    = tile.completed ? 'Claimed' : tile.lockedByAdmin ? 'Locked' : 'Available';
         var statusCls = tile.completed ? 'b-complete' : tile.lockedByAdmin ? 'b-incomplete' : 'b-exempt';
-        var pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
+        var basePts   = tile.points || 1;
+        var pos       = tile.position;
 
         html += '<tr>' +
-            '<td>' + (tile.position + 1) + '</td>' +
+            '<td>' + (pos + 1) + '</td>' +
             '<td>' + esc(tile.eventType) + '</td>' +
             '<td style="max-width:120px;white-space:normal">' + esc(tile.gameName || tile.gameId || '?') + '</td>' +
             '<td><span class="badge ' + statusCls + '">' + status + '</span></td>' +
             '<td>' + (tile.completedBy ? esc(tile.completedBy) : '<span style="color:var(--muted)">—</span>') + '</td>' +
-            '<td>' + pts + '</td>' +
+            '<td style="white-space:nowrap">' +
+            '<input id="dis-tp-' + pos + '" class="admin-input" type="number" min="1" value="' + basePts + '" style="width:52px;padding:2px 4px;height:26px;font-size:12px"> ' +
+            '<button class="admin-remove-btn" style="border-color:rgba(120,90,200,.3);color:#a580e0" onclick="disSetTilePoints(' + pos + ')">Set</button>' +
+            '</td>' +
             '<td style="text-align:right;white-space:nowrap">';
 
         if (tile.completed) {
-            html += '<button class="admin-remove-btn" onclick="disUnlockTile(' + tile.position + ')">Unlock</button> ';
+            html += '<button class="admin-remove-btn" onclick="disUnlockTile(' + pos + ')">Unlock</button> ';
         }
         if (!tile.lockedByAdmin && !tile.completed) {
-            html += '<button class="admin-remove-btn" style="border-color:rgba(200,164,74,.3);color:var(--accent)" onclick="disLockTile(' + tile.position + ')">Lock</button> ';
+            html += '<button class="admin-remove-btn" style="border-color:rgba(200,164,74,.3);color:var(--accent)" onclick="disLockTile(' + pos + ')">Lock</button> ';
         }
         if (tile.lockedByAdmin) {
-            html += '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" onclick="disUnlockTile(' + tile.position + ')">Unlock</button> ';
+            html += '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" onclick="disUnlockTile(' + pos + ')">Unlock</button> ';
         }
-        html += '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" onclick="disForceClaim(' + tile.position + ')">Force Claim</button> ';
+        html += '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" onclick="disForceClaim(' + pos + ')">Force Claim</button>';
         html += '</td></tr>';
     });
 
@@ -517,10 +630,22 @@ function disTriggerSync() {
     if (!url) { toast('SCRIPT_URL not configured', 'error'); return; }
 
     // Step 1: Fetch events from Apps Script
+    var _fetchedTotal = 0;
     fetch(url + '?action=api&fn=getDeploymentEvents', { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (json) {
             var events = (json && json.events) ? json.events : [];
+            _fetchedTotal = events.length;
+
+            if (events.length === 0) {
+                // Show what the Apps Script actually returned to aid debugging
+                var raw = JSON.stringify(json).slice(0, 200);
+                if (result) result.innerHTML =
+                    '<div class="field-warn">Apps Script returned 0 events. Response: <code style="font-size:10px;word-break:break-all">' + esc(raw) + '</code></div>';
+                if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
+                return null;
+            }
+
             if (btn) btn.textContent = 'Processing ' + events.length + ' rows\u2026';
 
             // Step 2: Send to server for processing
@@ -531,11 +656,27 @@ function disTriggerSync() {
             }).then(function (r) { return r.json(); });
         })
         .then(function (res) {
+            if (!res) return; // handled above (0 events case)
             if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
             if (res.error) throw new Error(res.error);
-            var msg = 'Sync complete. ' + (res.claimed || 0) + ' new tile(s) claimed, ' + (res.skipped || 0) + ' already taken.';
-            if (result) result.innerHTML = '<div class="field-info mt">' + esc(msg) + '</div>';
-            toast(msg, 'success');
+
+            var claimed  = res.claimed  || 0;
+            var skipped  = res.skipped  || 0;
+            var notFound = res.notFound || 0;
+            var total    = res.total    || 0;
+
+            var lines = [];
+            lines.push(claimed + ' new tile(s) claimed');
+            lines.push(skipped + ' already taken');
+            if (notFound > 0) lines.push(notFound + ' had no matching tile (check event type / game ID)');
+            lines.push(total + ' total rows from spreadsheet');
+
+            var cls = claimed > 0 ? 'field-info' : 'field-warn';
+            if (result) result.innerHTML = '<div class="' + cls + ' mt"><strong>Sync complete.</strong><br>' +
+                lines.map(function (l) { return esc(l); }).join('<br>') + '</div>';
+
+            var toastMsg = 'Sync: ' + claimed + ' claimed, ' + skipped + ' taken, ' + notFound + ' unmatched';
+            toast(toastMsg, claimed > 0 ? 'success' : 'error');
             _disLoad(false);
         })
         .catch(function (e) {
@@ -558,6 +699,13 @@ function disForceClaim(pos) {
     var user = prompt('Roblox username to assign tile ' + (pos + 1) + ' to:');
     if (!user || !user.trim()) return;
     _disAdminAction({ action: 'force-claim', position: pos, username: user.trim() }, 'Tile assigned to ' + user.trim());
+}
+
+function disSetTilePoints(pos) {
+    var inp = document.getElementById('dis-tp-' + pos);
+    var val = inp ? parseInt(inp.value, 10) : NaN;
+    if (isNaN(val) || val < 1) { toast('Points must be a positive integer', 'error'); return; }
+    _disAdminAction({ action: 'set-tile-points', position: pos, points: val }, 'Tile ' + (pos + 1) + ' set to ' + val + ' pt' + (val !== 1 ? 's' : ''));
 }
 
 // ── Points / raffle ────────────────────────────────────────────

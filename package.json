@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Nighthawk Commandos Mainframe — TNI:C division management system",
+  "scripts": {
+    "dev": "netlify dev"
+  },
   "dependencies": {
     "@netlify/blobs": "^7.3.0",
     "netlify": "^24.9.0"

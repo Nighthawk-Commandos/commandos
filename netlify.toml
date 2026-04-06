@@ -33,6 +33,17 @@ from   = "/api/admin/allowlist"
 to     = "/.netlify/functions/admin-allowlist"
 status = 200
 
+# ── Callback API redirects ──────────────────────────────────────
+[[redirects]]
+from   = "/api/callback/review"
+to     = "/.netlify/functions/callback-review"
+status = 200
+
+[[redirects]]
+from   = "/api/callback/process"
+to     = "/.netlify/functions/callback-process"
+status = 200
+
 # ── DIS API redirects ───────────────────────────────────────────
 [[redirects]]
 from   = "/api/dis/state"

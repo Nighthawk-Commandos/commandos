@@ -4,46 +4,7 @@
 //          regenerate-board, get-audit
 'use strict';
 
-const { getStore } = require('@netlify/blobs');
-const crypto = require('crypto');
-
-function blobsStore(name) {
-    return getStore({ name, consistency: 'strong', siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_ACCESS_TOKEN });
-}
-
-function verifySession(cookieHeader) {
-    if (!cookieHeader) return null;
-    const match = cookieHeader.match(/(?:^|;\s*)cmd_session=([^;]+)/);
-    if (!match) return null;
-    try {
-        const raw = decodeURIComponent(match[1]);
-        const lastDot = raw.lastIndexOf('.');
-        if (lastDot === -1) return null;
-        const payload64 = raw.slice(0, lastDot);
-        const sig = raw.slice(lastDot + 1);
-        const secret = process.env.SESSION_SECRET;
-        if (!secret) return null;
-        const expected = crypto.createHmac('sha256', secret).update(payload64).digest('hex');
-        if (sig.length !== expected.length) return null;
-        if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
-        const session = JSON.parse(Buffer.from(payload64, 'base64url').toString('utf8'));
-        if (Date.now() > session.exp * 1000) return null;
-        return session;
-    } catch { return null; }
-}
-
-function json(statusCode, body) {
-    return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
-function getCurrentWeekNumber() {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const day = start.getUTCDay() || 7;
-    if (day !== 4) start.setUTCDate(start.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(start.getUTCFullYear(), 0, 4));
-    return 1 + Math.round(((now.getTime() - yearStart.getTime()) / 86400000 - 3 + (yearStart.getUTCDay() + 6) % 7) / 7);
-}
+const { blobsStore, verifySession, requireAdmin, json, getCurrentWeekNumber, invalidateCache } = require('./_shared');
 
 async function addAudit(store, adminId, action, details) {
     let log;
@@ -54,31 +15,17 @@ async function addAudit(store, adminId, action, details) {
     await store.set('audit', JSON.stringify(log));
 }
 
-async function invalidateCache(store) {
-    try { await store.set('state-cache', ''); } catch {}
-}
-
 exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
-    if (!session) return json(401, { error: 'Unauthorized' });
-
-    const isAdmin = session.divisionRank >= 246;
-    if (!isAdmin) {
-        try {
-            const adminStore = blobsStore('commandos-admin');
-            const allowlist = await adminStore.get('allowlist', { type: 'json' }) || [];
-            if (!allowlist.some(e => e.discordId === session.discordId)) {
-                return json(403, { error: 'Forbidden' });
-            }
-        } catch { return json(403, { error: 'Forbidden' }); }
-    }
+    const authErr = await requireAdmin(session);
+    if (authErr) return authErr;
 
     let body;
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
-    const store = blobsStore('commandos-dis');
+    const store   = blobsStore('commandos-dis');
     const adminId = session.robloxUsername || session.discordId;
 
     // ── get-audit ────────────────────────────────────────────────
@@ -95,7 +42,7 @@ exports.handler = async (event) => {
         let board = await store.get('board', { type: 'json' }).catch(() => null);
         if (!board) return json(404, { error: 'No board' });
 
-        const tile = board.tiles[pos];
+        const tile     = board.tiles[pos];
         if (!tile) return json(404, { error: 'Tile not found' });
         const prevUser = tile.completedBy;
 
@@ -104,9 +51,9 @@ exports.handler = async (event) => {
             let users = await store.get('users', { type: 'json' }).catch(() => ({}));
             users = users || {};
             if (users[prevUser]) {
-                const gm = board.globalMultiplier || 1;
+                const gm  = board.globalMultiplier || 1;
                 const pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
-                users[prevUser].points = Math.max(0, (users[prevUser].points || 0) - pts);
+                users[prevUser].points      = Math.max(0, (users[prevUser].points || 0) - pts);
                 users[prevUser].claimedTiles = (users[prevUser].claimedTiles || []).filter(p => p !== pos);
                 await store.set('users', JSON.stringify(users));
             }
@@ -132,7 +79,7 @@ exports.handler = async (event) => {
         if (!board) return json(404, { error: 'No board' });
 
         board.tiles[pos] = Object.assign({}, board.tiles[pos], { lockedByAdmin: true });
-        board.updatedAt = new Date().toISOString();
+        board.updatedAt  = new Date().toISOString();
 
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'LOCK_TILE', { position: pos });
@@ -142,7 +89,7 @@ exports.handler = async (event) => {
 
     // ── force-claim ───────────────────────────────────────────────
     if (body.action === 'force-claim') {
-        const pos = Number(body.position);
+        const pos      = Number(body.position);
         const username = typeof body.username === 'string' ? body.username.trim() : null;
         if (isNaN(pos) || pos < 0 || pos > 24) return json(400, { error: 'Invalid position' });
         if (!username) return json(400, { error: 'Username required' });
@@ -154,13 +101,13 @@ exports.handler = async (event) => {
         users = users || {};
 
         const tile = board.tiles[pos];
-        const gm = board.globalMultiplier || 1;
-        const pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
+        const gm   = board.globalMultiplier || 1;
+        const pts  = (tile.points || 1) * (tile.multiplier || 1) * gm;
 
         board.tiles[pos] = Object.assign({}, tile, {
-            completed: true,
-            completedBy: username,
-            completedAt: new Date().toISOString(),
+            completed:    true,
+            completedBy:  username,
+            completedAt:  new Date().toISOString(),
             lockedByAdmin: false
         });
         board.updatedAt = new Date().toISOString();
@@ -181,8 +128,8 @@ exports.handler = async (event) => {
     // ── adjust-points ─────────────────────────────────────────────
     if (body.action === 'adjust-points') {
         const username = typeof body.username === 'string' ? body.username.trim() : null;
-        const delta = Number(body.delta);
-        if (!username) return json(400, { error: 'Username required' });
+        const delta    = Number(body.delta);
+        if (!username)  return json(400, { error: 'Username required' });
         if (isNaN(delta)) return json(400, { error: 'Delta must be a number' });
 
         let users = await store.get('users', { type: 'json' }).catch(() => ({}));
@@ -199,8 +146,8 @@ exports.handler = async (event) => {
     // ── adjust-raffle ─────────────────────────────────────────────
     if (body.action === 'adjust-raffle') {
         const username = typeof body.username === 'string' ? body.username.trim() : null;
-        const delta = parseInt(body.delta, 10);
-        if (!username) return json(400, { error: 'Username required' });
+        const delta    = parseInt(body.delta, 10);
+        if (!username)  return json(400, { error: 'Username required' });
         if (isNaN(delta)) return json(400, { error: 'Delta must be an integer' });
 
         let users = await store.get('users', { type: 'json' }).catch(() => ({}));
@@ -214,6 +161,26 @@ exports.handler = async (event) => {
         return json(200, { ok: true, newEntries: users[username].raffleEntries });
     }
 
+    // ── set-tile-points ───────────────────────────────────────────
+    if (body.action === 'set-tile-points') {
+        const pos = Number(body.position);
+        const pts = Number(body.points);
+        if (isNaN(pos) || pos < 0 || pos > 24) return json(400, { error: 'Invalid position' });
+        if (isNaN(pts) || pts < 1 || !Number.isInteger(pts)) return json(400, { error: 'Points must be a positive integer' });
+
+        let board = await store.get('board', { type: 'json' }).catch(() => null);
+        if (!board) return json(404, { error: 'No board' });
+
+        const prev = (board.tiles[pos] || {}).points || 1;
+        board.tiles[pos] = Object.assign({}, board.tiles[pos], { points: pts });
+        board.updatedAt  = new Date().toISOString();
+
+        await store.set('board', JSON.stringify(board));
+        await addAudit(store, adminId, 'SET_TILE_POINTS', { position: pos, prev, points: pts });
+        await invalidateCache(store);
+        return json(200, { ok: true });
+    }
+
     // ── set-multiplier ────────────────────────────────────────────
     if (body.action === 'set-multiplier') {
         const val = Number(body.value);
@@ -222,7 +189,7 @@ exports.handler = async (event) => {
         let board = await store.get('board', { type: 'json' }).catch(() => null);
         if (!board) return json(404, { error: 'No board' });
         board.globalMultiplier = val;
-        board.updatedAt = new Date().toISOString();
+        board.updatedAt        = new Date().toISOString();
 
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'SET_MULTIPLIER', { globalMultiplier: val });
@@ -237,7 +204,7 @@ exports.handler = async (event) => {
             board.tiles = board.tiles.map(t => Object.assign({}, t, {
                 completed: false, completedBy: null, completedAt: null
             }));
-            board.updatedAt = new Date().toISOString();
+            board.updatedAt  = new Date().toISOString();
             board.lastSyncAt = null;
         }
 
@@ -257,7 +224,7 @@ exports.handler = async (event) => {
             return json(400, { error: 'Game pool must have at least 25 entries. Currently has ' + gamepool.length + '.' });
         }
 
-        // Shuffle and pick 25
+        // Fisher-Yates shuffle
         const pool = gamepool.slice();
         for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -265,18 +232,18 @@ exports.handler = async (event) => {
         }
 
         const tiles = pool.slice(0, 25).map((g, idx) => {
-            const types = Array.isArray(g.eventTypes) && g.eventTypes.length > 0 ? g.eventTypes : ['Event'];
+            const types     = Array.isArray(g.eventTypes) && g.eventTypes.length > 0 ? g.eventTypes : ['Event'];
             const eventType = types[Math.floor(Math.random() * types.length)];
             return {
-                position: idx,
-                gameId: String(g.gameId),
-                gameName: g.name || null,
+                position:     idx,
+                gameId:       String(g.gameId),
+                gameName:     g.name || null,
                 eventType,
-                completed: false,
-                completedBy: null,
-                completedAt: null,
-                points: 1,
-                multiplier: 1,
+                completed:    false,
+                completedBy:  null,
+                completedAt:  null,
+                points:       1,
+                multiplier:   1,
                 lockedByAdmin: false
             };
         });
@@ -286,7 +253,7 @@ exports.handler = async (event) => {
             tiles,
             globalMultiplier: 1,
             weekNumber,
-            updatedAt: new Date().toISOString(),
+            updatedAt:  new Date().toISOString(),
             lastSyncAt: null
         };
 

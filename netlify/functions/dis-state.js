@@ -1,62 +1,60 @@
 // ── GET /api/dis/state — full board state, leaderboard, stats
-// Cached in Blobs for 30 seconds to reduce read load.
+// Two-layer cache:
+//   1. Netlify CDN (s-maxage=30) — serves all concurrent users from the edge.
+//   2. Blobs state-cache (30s TTL) — only one cold read per 30s for CDN misses.
 'use strict';
 
-const { getStore } = require('@netlify/blobs');
+const { blobsStore, json, getCurrentWeekNumber } = require('./_shared');
 
-function json(statusCode, body) {
-    return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
-function getCurrentWeekNumber() {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const day = start.getUTCDay() || 7;
-    if (day !== 4) start.setUTCDate(start.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(start.getUTCFullYear(), 0, 4));
-    return 1 + Math.round(((now.getTime() - yearStart.getTime()) / 86400000 - 3 + (yearStart.getUTCDay() + 6) % 7) / 7);
-}
-
-function blobsStore(name) {
-    return getStore({ name, consistency: 'strong', siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_ACCESS_TOKEN });
+// Adds CDN cache directives to the response so Netlify's global edge
+// can absorb concurrent traffic without hitting the function at all.
+function stateJson(body) {
+    return {
+        statusCode: 200,
+        headers: {
+            'Content-Type':  'application/json',
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60'
+        },
+        body: JSON.stringify(body)
+    };
 }
 
 exports.handler = async (event) => {
     if (event.httpMethod !== 'GET') return { statusCode: 405, body: 'Method Not Allowed' };
 
-    const store = blobsStore('commandos-dis');
+    const store      = blobsStore('commandos-dis');
     const weekNumber = getCurrentWeekNumber();
 
-    // ── 30-second cache ─────────────────────────────────────────
+    // ── Blobs cache (CDN miss path) ───────────────────────────────
     try {
         const cached = await store.get('state-cache', { type: 'json' });
         if (cached && cached.weekNumber === weekNumber &&
             Date.now() - new Date(cached.cachedAt).getTime() < 30000) {
-            return json(200, cached.state);
+            return stateJson(cached.state);
         }
-    } catch (_) { /* cache miss is fine */ }
+    } catch (_) {}
 
-    // ── Load fresh ───────────────────────────────────────────────
+    // ── Load fresh from Blobs ────────────────────────────────────
     const [board, users] = await Promise.all([
         store.get('board', { type: 'json' }).catch(() => null),
         store.get('users', { type: 'json' }).catch(() => ({}))
     ]);
 
-    const tiles = (board && board.tiles) ? board.tiles : [];
+    const tiles    = (board && board.tiles) ? board.tiles : [];
     const usersObj = users || {};
 
     // ── Build leaderboard ────────────────────────────────────────
     const leaderboard = Object.entries(usersObj)
         .map(([username, data]) => ({
             username,
-            points: data.points || 0,
+            points:        data.points || 0,
             raffleEntries: data.raffleEntries || 0,
-            tiles: (data.claimedTiles || []).length
+            tiles:         (data.claimedTiles || []).length
         }))
         .filter(e => e.points > 0 || e.tiles > 0)
         .sort((a, b) => {
             if (b.points !== a.points) return b.points - a.points;
-            if (b.tiles !== a.tiles) return b.tiles - a.tiles;
+            if (b.tiles  !== a.tiles)  return b.tiles  - a.tiles;
             return b.raffleEntries - a.raffleEntries;
         })
         .map((e, i) => Object.assign({ rank: i + 1 }, e));
@@ -67,17 +65,15 @@ exports.handler = async (event) => {
     const state = {
         tiles,
         globalMultiplier: (board && board.globalMultiplier) || 1,
-        weekNumber: (board && board.weekNumber) || weekNumber,
-        updatedAt: (board && board.updatedAt) || null,
-        lastSyncAt: (board && board.lastSyncAt) || null,
+        weekNumber:       (board && board.weekNumber) || weekNumber,
+        updatedAt:        (board && board.updatedAt)   || null,
+        lastSyncAt:       (board && board.lastSyncAt)  || null,
         leaderboard,
         stats: { totalClaimed: claimed, totalUnclaimed: unclaimed }
     };
 
-    // ── Save cache ───────────────────────────────────────────────
-    try {
-        await store.set('state-cache', JSON.stringify({ state, weekNumber, cachedAt: new Date().toISOString() }));
-    } catch (_) { /* non-critical */ }
+    // ── Save cache (non-blocking — don't add latency to the response) ──
+    store.set('state-cache', JSON.stringify({ state, weekNumber, cachedAt: new Date().toISOString() })).catch(() => {});
 
-    return json(200, state);
+    return stateJson(state);
 };
