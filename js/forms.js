@@ -30,7 +30,7 @@ function renderFormEventLog() {
     }
     var h = pageHeader('Event Log','Record a hosted event') +
         '<div class="form-page"><div class="form-card">' +
-        fHead('📋','Event Log','Submit a hosted event for tracking') +
+        fHead('EL','Event Log','Submit a hosted event for tracking') +
         '<div class="form-body">' +
         honeypot('el-hp') +
         fld('field-el-host','Host Username','*',
@@ -102,7 +102,7 @@ function renderFormEditEventLog() {
     }
     var h = pageHeader('Edit Event Log','Request a correction to an existing event log entry') +
         '<div class="form-page"><div class="form-card">' +
-        fHead('✏️','Edit Event Log','Correction requests require admin approval via Discord') +
+        fHead('ED','Edit Event Log','Correction requests require admin approval via Discord') +
         '<div class="form-body">' +
         honeypot('eel-hp') +
         fld('field-eel-id','Event ID','*',
@@ -225,7 +225,7 @@ function renderFormTransfer() {
     if (requireGroup()) return;
     var h = pageHeader('Stats Transfer','Request a username change or account transfer') +
         '<div class="form-page"><div class="form-card">' +
-        fHead('🔄','Stats Transfer','Changes applied only after an admin approves via Discord.') +
+        fHead('TR','Stats Transfer','Changes applied only after an admin approves via Discord.') +
         '<div class="form-body">' +
         honeypot('tr-hp') +
         fld('field-tr-type','Transfer Type','*',
@@ -285,7 +285,7 @@ function renderFormExemption() {
     if (requireGroup()) return;
     var h = pageHeader('Exemption Request','Submit an activity exemption') +
         '<div class="form-page"><div class="form-card">' +
-        fHead('🛡️','Exemption','Start date Mon–Thu · End date must be a Monday.') +
+        fHead('EX','Exemption','Start date Mon–Thu · End date must be a Monday.') +
         '<div class="form-body">' +
         honeypot('ex-hp') +
         fld('field-ex-user','Username','*',
@@ -412,7 +412,7 @@ function renderFormMissingAP() {
     if (requireGroup()) return;
     var h = pageHeader('Missing AP Request','Request activity points for an unlogged event') +
         '<div class="form-page"><div class="form-card">' +
-        fHead('⚡','Missing AP','Submit evidence of attendance for a missing AP award') +
+        fHead('AP','Missing AP','Submit evidence of attendance for a missing AP award') +
         '<div class="form-body">' +
         honeypot('ma-hp') +
         fld('field-ma-user','Your Username','*',

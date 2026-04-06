@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/styles.css?v=3">
+    <link rel="stylesheet" href="./css/styles.css?v=4">
 </head>
 <body>
 
@@ -50,7 +50,7 @@
 
             <h1 class="login-title">Nighthawk Commandos<br>Mainframe</h1>
             <p class="login-subtitle">AUTHORIZED PERSONNEL ONLY</p>
-            <p class="login-hint">Roblox group rank verification required via RoWifi</p>
+            <p class="login-hint">Roblox verification required via RoWifi</p>
 
             <button class="login-btn" id="login-btn">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" class="login-discord-icon" fill="currentColor">
@@ -61,7 +61,7 @@
         </div>
 
         <div class="login-footer">
-            Nighthawk Commandos · TNI:C Division
+            The Nighthawk Imperium · Commandos Division
         </div>
     </div>
 </div>
@@ -122,13 +122,15 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- Load order matters: config → api → auth → render → forms → app -->
-<script src="./js/config.js?v=3"></script>
-<script src="./js/api.js?v=3"></script>
-<script src="./js/auth.js?v=3"></script>
-<script src="./js/render.js?v=3"></script>
-<script src="./js/forms.js?v=3"></script>
-<script src="./js/app.js?v=3"></script>
+<!-- Load order matters: config → api → auth → render → forms → bingo → objectives → app -->
+<script src="./js/config.js?v=4"></script>
+<script src="./js/api.js?v=4"></script>
+<script src="./js/auth.js?v=4"></script>
+<script src="./js/render.js?v=4"></script>
+<script src="./js/forms.js?v=4"></script>
+<script src="./js/bingo.js?v=4"></script>
+<script src="./js/objectives.js?v=4"></script>
+<script src="./js/app.js?v=4"></script>
 
 <script>
 // ── Login screen error display + login button wiring ─────────

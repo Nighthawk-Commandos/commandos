@@ -4,7 +4,6 @@
 
 'use strict';
 
-// Shared data store
 window._D = null;
 
 // ── Content setter ────────────────────────────────────────────
@@ -12,116 +11,148 @@ function setContent(html) {
     document.getElementById('content').innerHTML = html;
 }
 
-// ── Home page ─────────────────────────────────────────────────
-// Add new sections here: icon, id, title, desc, accessFn, lockMsg
+// ── Home page section definitions ─────────────────────────────
+// To add a new section: append an object to HOME_SECTIONS below.
+// accessFn: function returning true/false — controls lock state.
+// handler:  function called when the card is clicked (unlocked).
 var HOME_SECTIONS = [
     {
         id:       'mainframe',
-        icon:     '🖥️',
+        tag:      'MF',
+        tagColor: 'var(--accent)',
         title:    'Commandos Mainframe',
         desc:     'Activity & officer trackers, event logs, department data and submission forms.',
         accessFn: function () { return window.AUTH.isInDivision(); },
-        lockMsg:  'Must be a member of the division group.'
+        lockMsg:  'Division group membership required.'
     },
     {
         id:       'div-objectives',
-        icon:     '🎯',
+        tag:      'OBJ',
+        tagColor: '#4a7fc8',
         title:    'Division Objectives',
-        desc:     'Track and manage current division objectives and goals.',
+        desc:     'Current monthly directives and per-department task tracking.',
         accessFn: function () { return window.AUTH.canAccessHigherSections(); },
         lockMsg:  'Requires rank 243 (Officer) or above.'
     },
     {
+        id:       'bingo',
+        tag:      'BNG',
+        tagColor: '#7c4ab8',
+        title:    'Officer Bingo System',
+        desc:     'Host incentive programme — complete the weekly tactical grid to earn raffle entries.',
+        accessFn: function () { return window.AUTH.canSubmitOfficerForms(); },
+        lockMsg:  'Requires rank 235 (Officer) or above.'
+    },
+    {
         id:       'deployment',
-        icon:     '⚡',
+        tag:      'DIS',
+        tagColor: '#4a9c72',
         title:    'Deployment Incentive System',
         desc:     'Review and manage deployment incentives and mission rewards.',
         accessFn: function () { return window.AUTH.canAccessHigherSections(); },
         lockMsg:  'Requires rank 243 (Officer) or above.'
     }
-    // ── Add new sections above this line ──
+    // ── Add new sections here ──────────────────────────────────
     // {
-    //     id: 'my-new-section', icon: '🔧', title: 'My Section',
-    //     desc: 'Description here.',
-    //     accessFn: function () { return true; },
-    //     lockMsg: ''
+    //     id: 'my-section', tag: 'TAG', tagColor: '#hex',
+    //     title: 'My Section', desc: 'Description.',
+    //     accessFn: function () { return true; }, lockMsg: ''
     // }
 ];
 
+// ── Home page render ──────────────────────────────────────────
 function renderHomeScreen() {
     var u = window.AUTH.user;
+
     var cards = HOME_SECTIONS.map(function (s) {
         var accessible = s.accessFn();
-        var cls = 'home-card' + (accessible ? '' : ' home-card-locked');
-        return '<div class="' + cls + '" ' +
-            (accessible ? 'data-click="enterSection" data-section="' + s.id + '"' : '') + '>' +
-            '<div class="home-card-icon">' + s.icon + '</div>' +
+        return '<div class="home-card' + (accessible ? '' : ' home-card-locked') + '"' +
+            (accessible ? ' data-click="enterSection" data-section="' + s.id + '"' : '') + '>' +
+            '<div class="home-card-tag" style="color:' + s.tagColor + ';border-color:' + s.tagColor + '44">' + esc(s.tag) + '</div>' +
             '<div class="home-card-body">' +
             '<div class="home-card-title">' + esc(s.title) + '</div>' +
             '<div class="home-card-desc">' + esc(s.desc) + '</div>' +
-            (accessible ? '' : '<div class="home-card-lock">🔒 ' + esc(s.lockMsg) + '</div>') +
+            (accessible ? '' : '<div class="home-card-lock">' + esc(s.lockMsg) + '</div>') +
             '</div>' +
+            (accessible ? '<div class="home-card-arrow">&#8594;</div>' : '') +
             '</div>';
     }).join('');
 
-    var rankLine = u.divisionRoleName
-        ? esc(u.divisionRoleName) + ' · Rank ' + u.divisionRank
+    var roleLine = u.divisionRoleName
+        ? esc(u.divisionRoleName) + ' &mdash; Rank ' + u.divisionRank
         : 'Rank ' + u.divisionRank;
 
-    var hs = document.getElementById('home-screen');
-    if (hs) {
-        hs.innerHTML =
-            '<div class="home-header">' +
-            '<div class="home-eyebrow">NIGHTHAWK COMMANDOS</div>' +
-            '<h1 class="home-title">Mainframe</h1>' +
-            '<div class="home-subtitle">Select a system to enter</div>' +
-            '</div>' +
-            '<div class="home-profile">' +
-            '<div class="home-profile-name">' + esc(u.robloxUsername) + '</div>' +
-            '<div class="home-profile-rank">' + rankLine + '</div>' +
-            '<button class="home-logout-btn" data-click="doLogout">Logout</button>' +
-            '</div>' +
-            '<div class="home-grid">' + cards + '</div>';
-    }
-}
+    var ghostLine = u.ghostRank > 0
+        ? '<span class="home-profile-ghost">Ghost Rank ' + u.ghostRank + (u.ghostRoleName ? ' &mdash; ' + esc(u.ghostRoleName) : '') + '</span>'
+        : '';
 
-function enterSection(el) {
-    var section = el && el.dataset ? el.dataset.section : el;
-    if (section === 'mainframe') {
-        document.getElementById('home-screen').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        loadMainframe();
-    } else if (section === 'div-objectives') {
-        renderSectionPlaceholder('Division Objectives', '🎯',
-            'This section is under construction. Check back soon.');
-    } else if (section === 'deployment') {
-        renderSectionPlaceholder('Deployment Incentive System', '⚡',
-            'This section is under construction. Check back soon.');
-    }
-}
-
-function renderSectionPlaceholder(title, icon, msg) {
     var hs = document.getElementById('home-screen');
     if (!hs) return;
     hs.innerHTML =
+        '<div class="bg-grid"></div>' +
+        '<div class="home-inner">' +
         '<div class="home-header">' +
-        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS</div>' +
-        '<h1 class="home-title">' + icon + ' ' + esc(title) + '</h1>' +
+        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS &mdash; DIVISION HUB</div>' +
+        '<h1 class="home-title">Mainframe</h1>' +
+        '<div class="home-divider"></div>' +
         '</div>' +
-        '<div class="section-placeholder">' +
-        '<div class="section-placeholder-icon">🚧</div>' +
-        '<div class="section-placeholder-msg">' + esc(msg) + '</div>' +
-        '<button class="btn-ghost" style="margin-top:18px" data-click="showHomeScreen">← Back to Hub</button>' +
+        '<div class="home-profile">' +
+        '<div class="home-profile-left">' +
+        '<div class="home-profile-name">' + esc(u.robloxUsername) + '</div>' +
+        '<div class="home-profile-rank">' + roleLine + ghostLine + '</div>' +
+        '</div>' +
+        '<button class="home-logout-btn" data-click="doLogout">Disconnect</button>' +
+        '</div>' +
+        '<div class="home-grid">' + cards + '</div>' +
         '</div>';
 }
 
-function showHomeScreen() {
-    renderHomeScreen();
+// ── Section enter ─────────────────────────────────────────────
+function enterSection(el) {
+    var section = el && el.dataset ? el.dataset.section : el;
+    if (section === 'mainframe')       { enterMainframe(); }
+    else if (section === 'div-objectives') { enterObjectives(); }
+    else if (section === 'bingo')      { enterBingo(); }
+    else if (section === 'deployment') {
+        renderSectionPlaceholder('Deployment Incentive System',
+            'This section is under construction. Check back soon.');
+    }
 }
 
-function doLogout() {
-    window.AUTH.logout();
+function enterMainframe() {
+    document.getElementById('home-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
+    loadMainframe();
 }
+
+function enterObjectives() {
+    renderObjectivesSection();
+}
+
+function enterBingo() {
+    renderBingoSection();
+}
+
+function renderSectionPlaceholder(title, msg) {
+    var hs = document.getElementById('home-screen');
+    if (!hs) return;
+    hs.innerHTML =
+        '<div class="bg-grid"></div>' +
+        '<div class="home-inner">' +
+        '<div class="section-ph-head">' +
+        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS</div>' +
+        '<h1 class="home-title">' + esc(title) + '</h1>' +
+        '</div>' +
+        '<div class="section-placeholder">' +
+        '<div class="section-placeholder-msg">' + esc(msg) + '</div>' +
+        '<button class="btn-ghost" style="margin-top:18px" data-click="showHomeScreen">&#8592; Back to Hub</button>' +
+        '</div>' +
+        '</div>';
+}
+
+function showHomeScreen() { renderHomeScreen(); }
+function doLogout()       { window.AUTH.logout(); }
 
 // ── Navigation (mainframe pages) ─────────────────────────────
 var PAGES = {
@@ -159,37 +190,32 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
 }
 
-// ── Update nav visibility based on rank ───────────────────────
+// ── Rank-based nav visibility ─────────────────────────────────
 function updateNavAccess() {
     var u = window.AUTH.user;
     if (!u) return;
-    var inGroup   = u.divisionRank > 0;
+    var inGroup    = u.divisionRank > 0;
     var canOfficer = u.divisionRank >= 235 || u.ghostRank >= 7;
     var canAdmin   = u.divisionRank >= 246;
 
-    // Hide/show officer-only forms
+    // Officer-only forms
     ['form-eventlog', 'form-editeventlog'].forEach(function (key) {
         var item = document.querySelector('.nav-item[data-key="' + key + '"]');
         if (item) item.style.display = (inGroup && canOfficer) ? '' : 'none';
     });
-
-    // Hide/show all forms if not in group
+    // All forms hidden if not in group
     ['form-eventlog', 'form-editeventlog', 'form-transfer', 'form-exemption', 'form-missingap'].forEach(function (key) {
         var item = document.querySelector('.nav-item[data-key="' + key + '"]');
         if (item && !inGroup) item.style.display = 'none';
     });
-
-    // Show admin nav
+    // Admin nav
     var adminItem  = document.getElementById('nav-admin');
     var adminGroup = document.getElementById('nav-admin-group');
     if (adminItem)  adminItem.style.display  = canAdmin ? '' : 'none';
     if (adminGroup) adminGroup.style.display = canAdmin ? '' : 'none';
-
-    // Show group label in sidebar logo area
+    // Rank in sidebar
     var rankEl = document.getElementById('sidebar-rank');
-    if (rankEl && u) {
-        rankEl.textContent = (u.divisionRoleName || 'Rank ' + u.divisionRank);
-    }
+    if (rankEl) rankEl.textContent = u.divisionRoleName || ('Rank ' + u.divisionRank);
 }
 
 // ── Search wire-up ────────────────────────────────────────────
@@ -199,28 +225,24 @@ function wireActivity() {
     if (!inp) return;
     inp.addEventListener('input', debounce(function () { renderActivityRows(window._D.activity.members); }, 160));
 }
-
 function wireOfficers() {
     renderOfficerRows(window._D.officers.officers);
     var inp = document.getElementById('off-search');
     if (!inp) return;
     inp.addEventListener('input', debounce(function () { renderOfficerRows(window._D.officers.officers); }, 160));
 }
-
 function wireHonored() {
     renderHonoredRows(window._D.honored.members);
     var inp = document.getElementById('hon-search');
     if (!inp) return;
     inp.addEventListener('input', debounce(function () { renderHonoredRows(window._D.honored.members); }, 160));
 }
-
 function wireDepts() {
     var inp = document.getElementById('dept-search');
     if (!inp) return;
     inp.addEventListener('input', debounce(function () {
-        var q    = inp.value.toLowerCase();
         var grid = document.getElementById('dept-grid');
-        if (grid) grid.innerHTML = buildDeptBlocks(window._D.departments, q);
+        if (grid) grid.innerHTML = buildDeptBlocks(window._D.departments, inp.value.toLowerCase());
     }, 160));
 }
 
@@ -233,47 +255,53 @@ function refreshData() {
         toast('Data refreshed', 'success');
         if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
         var active = document.querySelector('.nav-item.active');
-        if (active) { var key = active.dataset.key; if (key && PAGES[key]) PAGES[key](); }
+        if (active && PAGES[active.dataset.key]) PAGES[active.dataset.key]();
     }).catch(function (e) {
         toast('Refresh failed: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
     });
 }
 
-// ── Profile card population ───────────────────────────────────
+// ── Profile card ──────────────────────────────────────────────
 function populateProfileCard() {
-    var u = window.AUTH.user;
-    if (!u) return;
-    var nameEl  = document.getElementById('profile-name');
-    var rankEl  = document.getElementById('profile-rank');
-    var card    = document.getElementById('profile-card');
+    var u = window.AUTH.user; if (!u) return;
+    var nameEl = document.getElementById('profile-name');
+    var rankEl = document.getElementById('profile-rank');
+    var card   = document.getElementById('profile-card');
     if (nameEl) nameEl.textContent = u.robloxUsername || u.discordUsername;
-    if (rankEl) {
-        rankEl.textContent = u.divisionRoleName
-            ? u.divisionRoleName + ' · ' + u.divisionRank
-            : 'Rank ' + u.divisionRank;
-    }
+    if (rankEl) rankEl.textContent = u.divisionRoleName
+        ? u.divisionRoleName + ' \u00b7 ' + u.divisionRank
+        : 'Rank ' + u.divisionRank;
     if (card) card.style.display = 'flex';
 }
 
-// ── Global event delegation (replaces remaining inline handlers)
+// ── Global event delegation ───────────────────────────────────
 document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-click]');
     if (!el) return;
     var fn = el.dataset.click;
-    if (fn === 'enterSection') enterSection(el);
+    if (fn === 'enterSection')  enterSection(el);
     else if (fn === 'doLogout') doLogout();
     else if (fn === 'showHomeScreen') showHomeScreen();
     else if (typeof window[fn] === 'function') window[fn](el);
 });
 
+// ── Static DOM wiring ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    var hbg = document.getElementById('hbg');
+    if (hbg) hbg.addEventListener('click', toggleSidebar);
+    var refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
+    var logoutBtn = document.getElementById('sidebar-logout');
+    if (logoutBtn) logoutBtn.addEventListener('click', function () { window.AUTH.logout(); });
+    document.querySelectorAll('.nav-item').forEach(function (item) {
+        item.addEventListener('click', function () { go(item.dataset.key, item); });
+    });
+});
+
 // ── Load mainframe data ───────────────────────────────────────
 function loadMainframe() {
     if (window._D) {
-        // Data already loaded, just show the mainframe
-        document.getElementById('home-screen').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
         updateNavAccess();
         populateProfileCard();
         setContent(renderSettings(window._D));
@@ -300,44 +328,18 @@ function loadMainframe() {
         });
 }
 
-// ── Static DOM wiring (DOMContentLoaded) ─────────────────────
-document.addEventListener('DOMContentLoaded', function () {
-    var hbg = document.getElementById('hbg');
-    if (hbg) hbg.addEventListener('click', toggleSidebar);
-
-    var refreshBtn = document.getElementById('refresh-btn');
-    if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
-
-    var logoutBtn = document.getElementById('sidebar-logout');
-    if (logoutBtn) logoutBtn.addEventListener('click', function () { window.AUTH.logout(); });
-
-    document.querySelectorAll('.nav-item').forEach(function (item) {
-        item.addEventListener('click', function () { go(item.dataset.key, item); });
-    });
-});
-
 // ── Boot ──────────────────────────────────────────────────────
 (function boot() {
-    // 1. Check SCRIPT_URL config
     if (!window.SCRIPT_URL || window.SCRIPT_URL.indexOf('YOUR_DEPLOYMENT_ID_HERE') !== -1) {
         document.getElementById('loading').classList.add('hidden');
-        setContent(
-            '<div class="setup-wrap">' +
-            '<div class="ph"><div class="ey">Setup Required</div><h1>Set Your Script URL</h1>' +
-            '<div class="sub">Edit config.js and set your Apps Script /exec URL.</div></div>' +
-            '</div>'
-        );
+        setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Setup Required</div><h1>Set Your Script URL</h1><div class="sub">Edit config.js and set your Apps Script /exec URL.</div></div></div>');
         return;
     }
-
-    // 2. Load auth session
     window.AUTH.load().then(function (user) {
         document.getElementById('loading').classList.add('hidden');
         if (!user) {
-            // Not logged in → show login screen
             document.getElementById('login-screen').classList.remove('hidden');
         } else {
-            // Logged in → show home screen
             document.getElementById('home-screen').classList.remove('hidden');
             renderHomeScreen();
         }

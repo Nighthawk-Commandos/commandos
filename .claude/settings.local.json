@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:UserstheblWebstormProjectscommandosOfficer-BingoOfficer-Bingo -type f \\\\\\(-name *.html -o -name *.jsx -o -name *.tsx -o -name *.css -o -name *.scss \\\\\\) ! -path */node_modules/* ! -path */.git/* ! -path */.local/*)",
+      "Bash(find C:UserstheblWebstormProjectscommandosOfficer-BingoOfficer-Bingoartifactsapi-server -type f ! -path */node_modules/* ! -path */.git/*)"
+    ]
+  }
+}
