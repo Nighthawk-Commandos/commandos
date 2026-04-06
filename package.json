@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@netlify/blobs": "^7.3.0",
+    "dotenv-webpack": "^9.0.0",
     "netlify": "^24.9.0"
   }
 }

@@ -81,7 +81,7 @@ const TYPE_CONFIG = {
 };
 
 async function callAppsScript(params) {
-    const scriptUrl = process.env.SCRIPT_URL;
+    const scriptUrl = window.SCRIPT_URL;
     if (!scriptUrl) throw new Error('SCRIPT_URL not configured');
     const qs = new URLSearchParams({
         action:  'api',
@@ -95,7 +95,7 @@ async function callAppsScript(params) {
 
 async function fetchMemberList() {
     try {
-        const scriptUrl = process.env.SCRIPT_URL;
+        const scriptUrl = window.SCRIPT_URL;
         if (!scriptUrl) return [];
         const qs  = new URLSearchParams({ action: 'api', fn: 'getGroupMembers' });
         const res = await fetch(scriptUrl + '?' + qs.toString());

@@ -61,7 +61,7 @@ exports.handler = async (event) => {
     if (action !== 'approve' && action !== 'deny') return resultPage(false, 'Invalid action.');
     if (!reviewer) return resultPage(false, 'Reviewer username is required.');
 
-    const scriptUrl = process.env.SCRIPT_URL;
+    const scriptUrl = window.SCRIPT_URL;
     if (!scriptUrl) return resultPage(false, 'Server configuration error: SCRIPT_URL not set.');
 
     try {

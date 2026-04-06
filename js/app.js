@@ -138,23 +138,8 @@ function renderSectionPlaceholder(title, msg) {
         '</div>';
 }
 
-function showHomeScreen() {
-    // Stop DIS polling if running
-    if (typeof disLeave === 'function') disLeave();
-    // Remove objectives layout mode
-    var hs = document.getElementById('home-screen');
-    if (hs) hs.classList.remove('obj-mode');
-    // If mainframe was showing, swap back to home screen
-    var appEl = document.getElementById('app');
-    if (appEl && !appEl.classList.contains('hidden')) {
-        appEl.classList.add('hidden');
-        var hbg = document.getElementById('hbg');
-        if (hbg) hbg.style.display = 'none';
-        if (hs) hs.classList.remove('hidden');
-    }
-    renderHomeScreen();
-}
-function doLogout() { window.AUTH.logout(); }
+function showHomeScreen() { renderHomeScreen(); }
+function doLogout()       { window.AUTH.logout(); }
 
 // ── Navigation (mainframe pages) ─────────────────────────────
 var PAGES = {
