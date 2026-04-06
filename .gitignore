@@ -3,3 +3,5 @@
 /Officer-Bingo
 .env
 .claude
+# Local Netlify folder
+.netlify

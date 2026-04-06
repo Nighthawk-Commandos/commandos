@@ -17,10 +17,14 @@ function getCurrentWeekNumber() {
     return 1 + Math.round(((now.getTime() - yearStart.getTime()) / 86400000 - 3 + (yearStart.getUTCDay() + 6) % 7) / 7);
 }
 
+function blobsStore(name) {
+    return getStore({ name, consistency: 'strong', siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_ACCESS_TOKEN });
+}
+
 exports.handler = async (event) => {
     if (event.httpMethod !== 'GET') return { statusCode: 405, body: 'Method Not Allowed' };
 
-    const store = getStore({ name: 'commandos-dis', consistency: 'strong' });
+    const store = blobsStore('commandos-dis');
     const weekNumber = getCurrentWeekNumber();
 
     // ── 30-second cache ─────────────────────────────────────────

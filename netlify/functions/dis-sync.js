@@ -6,6 +6,10 @@
 const { getStore } = require('@netlify/blobs');
 const crypto = require('crypto');
 
+function blobsStore(name) {
+    return getStore({ name, consistency: 'strong', siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_ACCESS_TOKEN });
+}
+
 function verifySession(cookieHeader) {
     if (!cookieHeader) return null;
     const match = cookieHeader.match(/(?:^|;\s*)cmd_session=([^;]+)/);
@@ -57,7 +61,7 @@ exports.handler = async (event) => {
     const isAdmin = session.divisionRank >= 246;
     if (!isAdmin) {
         try {
-            const adminStore = getStore({ name: 'commandos-admin', consistency: 'strong' });
+            const adminStore = blobsStore('commandos-admin');
             const allowlist = await adminStore.get('allowlist', { type: 'json' }) || [];
             if (!allowlist.some(e => e.discordId === session.discordId)) {
                 return json(403, { error: 'Forbidden: admin rank required' });
@@ -69,7 +73,7 @@ exports.handler = async (event) => {
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
     const events = Array.isArray(body.events) ? body.events : [];
-    const store = getStore({ name: 'commandos-dis', consistency: 'strong' });
+    const store = blobsStore('commandos-dis');
 
     // Load board and users
     let board, users;

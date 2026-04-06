@@ -4,6 +4,7 @@
   "private": true,
   "description": "Nighthawk Commandos Mainframe — TNI:C division management system",
   "dependencies": {
-    "@netlify/blobs": "^7.3.0"
+    "@netlify/blobs": "^7.3.0",
+    "netlify": "^24.9.0"
   }
 }
