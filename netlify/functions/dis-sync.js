@@ -150,13 +150,6 @@ exports.handler = async (event) => {
         claimed++;
     }
 
-    // Weekly raffle: top 5 by points get +1 entry (recalculate)
-    const sorted = Object.entries(users)
-        .map(([u, d]) => ({ username: u, points: d.points || 0 }))
-        .sort((a, b) => b.points - a.points)
-        .slice(0, 5)
-        .map(e => e.username);
-
     // Note: raffle entries from tile claims only — manual adjustments handled by admin endpoint
 
     // Update board
