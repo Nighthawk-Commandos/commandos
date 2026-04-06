@@ -3,61 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TNI:C Commandos Mainframe</title>
+    <title>Nighthawk Commandos Mainframe</title>
     <link rel="icon" href="https://i.imgur.com/YA7Ilep.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/styles.css?v=2">
+    <link rel="stylesheet" href="./css/styles.css?v=3">
 </head>
 <body>
 
+<!-- ── Loading screen ─────────────────────────────────────── -->
 <div id="loading">
-    <div class="lt">TNI:C</div>
+    <div class="lt">NIGHTHAWK</div>
     <div class="spinner"></div>
-    <div class="ls" id="loading-status">Loading mainframe…</div>
+    <div class="ls" id="loading-status">Verifying credentials…</div>
 </div>
 
-<div id="hbg"><span></span><span></span><span></span></div>
+<!-- ── Login screen ──────────────────────────────────────── -->
+<div id="login-screen" class="hidden">
+    <div class="bg-grid"></div>
+    <div class="login-wrap">
 
-<div id="app">
+        <!-- Error banner (shown when ?error= param present) -->
+        <div class="login-error hidden" id="login-error">
+            <svg class="login-error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div>
+                <div class="login-error-head">Access Denied</div>
+                <div class="login-error-msg" id="login-error-msg"></div>
+                <div class="login-error-hint hidden" id="login-error-hint">
+                    Visit <a href="https://rowifi.xyz" target="_blank" rel="noopener" class="link-accent">rowifi.xyz</a> to link your Roblox account to Discord.
+                </div>
+            </div>
+        </div>
+
+        <!-- Login card -->
+        <div class="login-card">
+            <div class="login-card-top-bar"></div>
+
+            <div class="login-shield">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+            </div>
+
+            <h1 class="login-title">Nighthawk Commandos<br>Mainframe</h1>
+            <p class="login-subtitle">AUTHORIZED PERSONNEL ONLY</p>
+            <p class="login-hint">Roblox group rank verification required via RoWifi</p>
+
+            <button class="login-btn" id="login-btn">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" class="login-discord-icon" fill="currentColor">
+                    <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/>
+                </svg>
+                Authenticate via Discord
+            </button>
+        </div>
+
+        <div class="login-footer">
+            Nighthawk Commandos · TNI:C Division
+        </div>
+    </div>
+</div>
+
+<!-- ── Home screen (section hub) ─────────────────────────── -->
+<div id="home-screen" class="hidden">
+    <div class="bg-grid"></div>
+    <!-- Content injected by app.js renderHomeScreen() -->
+</div>
+
+<!-- ── Mobile hamburger (mainframe only) ─────────────────── -->
+<div id="hbg" style="display:none"><span></span><span></span><span></span></div>
+
+<!-- ── Main app (mainframe) ──────────────────────────────── -->
+<div id="app" class="hidden">
     <aside id="sidebar">
         <div class="sidebar-logo">
             <div class="label">TNI Commandos</div>
             <div class="title">Commandos<br>Mainframe</div>
+            <div class="sidebar-rank" id="sidebar-rank"></div>
         </div>
         <div class="sidebar-actions">
             <button id="refresh-btn">↻ Refresh Data</button>
         </div>
         <nav>
             <div class="nav-group">Overview</div>
-            <div class="nav-item active" data-key="settings"      ><span class="nav-dot"></span>Settings</div>
+            <div class="nav-item active" data-key="settings"   ><span class="nav-dot"></span>Settings</div>
             <div class="nav-group">Trackers</div>
-            <div class="nav-item" data-key="activity"             ><span class="nav-dot"></span>Activity Tracker</div>
-            <div class="nav-item" data-key="officers"             ><span class="nav-dot"></span>Officer Tracker</div>
-            <div class="nav-item" data-key="honored"              ><span class="nav-dot"></span>Honored Tracker</div>
-            <div class="nav-item" data-key="departments"          ><span class="nav-dot"></span>Department Members</div>
+            <div class="nav-item" data-key="activity"          ><span class="nav-dot"></span>Activity Tracker</div>
+            <div class="nav-item" data-key="officers"          ><span class="nav-dot"></span>Officer Tracker</div>
+            <div class="nav-item" data-key="honored"           ><span class="nav-dot"></span>Honored Tracker</div>
+            <div class="nav-item" data-key="departments"       ><span class="nav-dot"></span>Department Members</div>
             <div class="nav-group">Events</div>
-            <div class="nav-item" data-key="weekly"               ><span class="nav-dot"></span>Weekly Events</div>
-            <div class="nav-item" data-key="monthly"              ><span class="nav-dot"></span>Monthly Events</div>
+            <div class="nav-item" data-key="weekly"            ><span class="nav-dot"></span>Weekly Events</div>
+            <div class="nav-item" data-key="monthly"           ><span class="nav-dot"></span>Monthly Events</div>
             <div class="nav-group">Forms</div>
-            <div class="nav-item" data-key="form-eventlog"        ><span class="nav-dot"></span>Event Log</div>
-            <div class="nav-item" data-key="form-editeventlog"    ><span class="nav-dot"></span>Edit Event Log</div>
-            <div class="nav-item" data-key="form-transfer"        ><span class="nav-dot"></span>Stats Transfer</div>
-            <div class="nav-item" data-key="form-exemption"       ><span class="nav-dot"></span>Exemption</div>
-            <div class="nav-item" data-key="form-missingap"       ><span class="nav-dot"></span>Missing AP</div>
+            <div class="nav-item" data-key="form-eventlog"     ><span class="nav-dot"></span>Event Log</div>
+            <div class="nav-item" data-key="form-editeventlog" ><span class="nav-dot"></span>Edit Event Log</div>
+            <div class="nav-item" data-key="form-transfer"     ><span class="nav-dot"></span>Stats Transfer</div>
+            <div class="nav-item" data-key="form-exemption"    ><span class="nav-dot"></span>Exemption</div>
+            <div class="nav-item" data-key="form-missingap"    ><span class="nav-dot"></span>Missing AP</div>
+            <!-- Admin section (hidden until rank 246+ confirmed) -->
+            <div class="nav-group" id="nav-admin-group" style="display:none">Admin</div>
+            <div class="nav-item" data-key="admin" id="nav-admin" style="display:none"><span class="nav-dot"></span>Admin Dashboard</div>
         </nav>
+
+        <!-- Profile card at bottom of sidebar -->
+        <div id="profile-card" class="profile-card" style="display:none">
+            <div class="profile-info">
+                <div class="profile-name" id="profile-name"></div>
+                <div class="profile-rank" id="profile-rank"></div>
+            </div>
+            <button class="profile-logout" id="sidebar-logout" title="Logout">↩</button>
+        </div>
     </aside>
     <main id="main"><div id="content"></div></main>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<!-- Load order matters: config → api → render → forms → app -->
-<script src="./js/config.js?v=2"></script>
-<script src="./js/api.js?v=2"></script>
-<script src="./js/render.js?v=2"></script>
-<script src="./js/forms.js?v=2"></script>
-<script src="./js/app.js?v=2"></script>
+<!-- Load order matters: config → api → auth → render → forms → app -->
+<script src="./js/config.js?v=3"></script>
+<script src="./js/api.js?v=3"></script>
+<script src="./js/auth.js?v=3"></script>
+<script src="./js/render.js?v=3"></script>
+<script src="./js/forms.js?v=3"></script>
+<script src="./js/app.js?v=3"></script>
+
+<script>
+// ── Login screen error display + login button wiring ─────────
+(function () {
+    var errors = {
+        rowifi_not_linked: 'You must link your Discord to Roblox via RoWifi before accessing this system.',
+        rowifi_error:      'Failed to verify your Roblox account. Please try again later.',
+        not_in_group:      'You must be a member of the Commandos division to access this system.',
+        rank_too_low:      'Your rank is too low to access this system.',
+        auth_failed:       'Authentication failed. Please try again.',
+        unauthorized:      'You are not authorised to access this system.'
+    };
+    var search   = window.location.search;
+    var params   = new URLSearchParams(search);
+    var errorKey = params.get('error');
+    if (errorKey) {
+        var errEl  = document.getElementById('login-error');
+        var msgEl  = document.getElementById('login-error-msg');
+        var hintEl = document.getElementById('login-error-hint');
+        if (errEl && msgEl) {
+            msgEl.textContent = errors[errorKey] || errors['unauthorized'];
+            errEl.classList.remove('hidden');
+            if (errorKey === 'rowifi_not_linked' && hintEl) hintEl.classList.remove('hidden');
+        }
+        // Clean URL
+        history.replaceState(null, '', window.location.pathname);
+    }
+    var loginBtn = document.getElementById('login-btn');
+    if (loginBtn) loginBtn.addEventListener('click', function () {
+        window.location.href = '/api/auth/discord';
+    });
+
+    // Admin nav group visibility mirror
+    var adminItem = document.getElementById('nav-admin');
+    var adminGroup = document.getElementById('nav-admin-group');
+    if (adminItem) {
+        var observer = new MutationObserver(function () {
+            if (adminGroup) adminGroup.style.display = adminItem.style.display;
+        });
+        observer.observe(adminItem, { attributes: true, attributeFilter: ['style'] });
+    }
+})();
+</script>
 </body>
 </html>

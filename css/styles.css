@@ -354,3 +354,231 @@ td.wrap-right { white-space: normal; word-break: break-all; text-align: right; }
 .medal.md-dd-valor     { background: #2a2a2a; color: #DAD3DA; border: 1px solid #DAD3DA33; }
 .medal.md-dir-merit    { background: #1a2830; color: #8AB0BE; border: 1px solid #8AB0BE33; }
 .medal.md-dg-virtue    { background: #2d1515; color: #C47070; border: 1px solid #C4707033; }
+
+/* ══════════════════════════════════════════════════════════════
+   NEW: Background grid, login screen, home screen, profile card,
+   admin dashboard styles
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Hidden utility ──────────────────────────────────────────── */
+.hidden { display: none !important; }
+
+/* ── Background grid pattern ─────────────────────────────────── */
+.bg-grid {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.4) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: .03;
+}
+
+/* ── Login screen ────────────────────────────────────────────── */
+#login-screen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 90; padding: 24px; overflow-y: auto;
+}
+.login-wrap {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 420px;
+    display: flex; flex-direction: column; gap: 14px;
+}
+
+/* Error banner */
+.login-error {
+    background: rgba(224,82,82,.1); border: 1px solid rgba(224,82,82,.35);
+    padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start;
+    color: var(--red);
+}
+.login-error-icon { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+.login-error-head { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 4px; }
+.login-error-msg  { font-size: 12px; opacity: .9; }
+.login-error-hint { font-size: 11px; margin-top: 8px; opacity: .75; }
+
+/* Card */
+.login-card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 40px 36px 36px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    position: relative; overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,.6);
+}
+.login-card-top-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: .6;
+}
+.login-shield {
+    width: 72px; height: 72px; border: 1px solid rgba(200,164,74,.25);
+    background: rgba(200,164,74,.06); display: flex; align-items: center;
+    justify-content: center; color: var(--accent); margin-bottom: 26px;
+}
+.login-shield svg { width: 36px; height: 36px; }
+
+.login-title {
+    font-family: 'Syne', sans-serif; font-size: clamp(18px, 4vw, 24px);
+    font-weight: 800; color: var(--text); line-height: 1.2;
+    letter-spacing: -.01em; margin-bottom: 8px; text-transform: uppercase;
+}
+.login-subtitle {
+    font-size: 10px; font-weight: 600; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+}
+.login-hint {
+    font-size: 11px; color: var(--muted); margin-bottom: 32px; opacity: .75;
+}
+.login-btn {
+    width: 100%; background: rgba(200,164,74,.15);
+    border: 1px solid rgba(200,164,74,.4); color: var(--accent2);
+    font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600;
+    padding: 14px 24px; cursor: pointer; transition: all .15s;
+    letter-spacing: .08em; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.login-btn:hover { background: rgba(200,164,74,.28); border-color: rgba(200,164,74,.7); }
+.login-discord-icon { width: 20px; height: 20px; flex-shrink: 0; }
+.login-footer {
+    text-align: center; font-size: 10px; color: var(--muted);
+    letter-spacing: .1em; text-transform: uppercase; opacity: .5;
+}
+
+/* ── Home screen ─────────────────────────────────────────────── */
+#home-screen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    z-index: 90; padding: 48px 24px 40px; overflow-y: auto;
+}
+.home-header {
+    position: relative; z-index: 1; text-align: center; margin-bottom: 10px;
+}
+.home-eyebrow {
+    font-size: 10px; font-weight: 600; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+}
+.home-title {
+    font-family: 'Syne', sans-serif; font-size: clamp(28px, 5vw, 48px);
+    font-weight: 800; color: var(--text); line-height: 1; text-transform: uppercase;
+    letter-spacing: -.02em; margin-bottom: 8px;
+}
+.home-subtitle {
+    font-size: 12px; color: var(--muted); letter-spacing: .06em;
+}
+.home-profile {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(200,164,74,.06); border: 1px solid rgba(200,164,74,.15);
+    padding: 10px 18px; margin-bottom: 36px; margin-top: 24px;
+}
+.home-profile-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--accent2); }
+.home-profile-rank { font-size: 11px; color: var(--muted); }
+.home-logout-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-family: 'DM Mono', monospace; font-size: 11px; padding: 5px 12px;
+    cursor: pointer; transition: all .12s; margin-left: auto;
+}
+.home-logout-btn:hover { border-color: rgba(224,82,82,.4); color: var(--red); }
+
+.home-grid {
+    position: relative; z-index: 1; width: 100%; max-width: 860px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
+}
+.home-card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 24px; cursor: pointer; transition: all .18s;
+    display: flex; gap: 16px; align-items: flex-start;
+    position: relative; overflow: hidden;
+}
+.home-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0; transition: opacity .18s;
+}
+.home-card:hover { border-color: rgba(200,164,74,.3); background: rgba(200,164,74,.05); }
+.home-card:hover::before { opacity: .5; }
+.home-card:active { transform: scale(.99); }
+
+.home-card-locked {
+    opacity: .45; cursor: not-allowed;
+}
+.home-card-locked:hover { border-color: var(--border); background: var(--surface); }
+.home-card-locked:hover::before { opacity: 0; }
+.home-card-locked:active { transform: none; }
+
+.home-card-icon { font-size: 26px; flex-shrink: 0; line-height: 1; }
+.home-card-body { flex: 1; }
+.home-card-title {
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+    color: var(--accent2); margin-bottom: 6px; line-height: 1.2;
+}
+.home-card-desc { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.home-card-lock { font-size: 10px; color: var(--red); margin-top: 8px; opacity: .8; }
+
+/* Section placeholder */
+.section-placeholder {
+    position: relative; z-index: 1;
+    text-align: center; padding: 60px 20px; max-width: 400px;
+}
+.section-placeholder-icon { font-size: 48px; margin-bottom: 16px; }
+.section-placeholder-msg { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+/* ── Sidebar rank label ───────────────────────────────────────── */
+.sidebar-rank {
+    font-size: 10px; color: var(--accent); letter-spacing: .1em;
+    text-transform: uppercase; margin-top: 4px; opacity: .8;
+}
+
+/* ── Profile card (sidebar bottom) ───────────────────────────── */
+.profile-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-top: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+}
+.profile-info { flex: 1; min-width: 0; }
+.profile-name {
+    font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+    color: var(--accent2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.profile-rank { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.profile-logout {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    width: 28px; height: 28px; border-radius: 5px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: all .12s; flex-shrink: 0;
+}
+.profile-logout:hover { border-color: rgba(224,82,82,.4); color: var(--red); }
+
+/* ── Admin dashboard ─────────────────────────────────────────── */
+.admin-wrap { max-width: 640px; display: flex; flex-direction: column; gap: 20px; }
+.admin-desc { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+.admin-add-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.admin-input {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px;
+    padding: 8px 12px; outline: none; flex: 1; min-width: 140px;
+    transition: border-color .15s;
+}
+.admin-input:focus { border-color: rgba(200,164,74,.4); }
+.admin-list { display: flex; flex-direction: column; gap: 0; }
+.admin-list-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.admin-list-row:last-child { border-bottom: none; }
+.admin-list-label { color: var(--text); flex: 1; }
+.admin-list-id    { color: var(--muted); font-size: 11px; font-family: 'DM Mono', monospace; }
+.admin-remove-btn {
+    background: transparent; border: 1px solid rgba(224,82,82,.3); color: var(--red);
+    font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 10px;
+    cursor: pointer; transition: all .12s; border-radius: 4px; white-space: nowrap;
+}
+.admin-remove-btn:hover { background: rgba(224,82,82,.1); border-color: rgba(224,82,82,.6); }
+.admin-remove-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── App hidden initially ────────────────────────────────────── */
+#app.hidden { display: none !important; }
+
+/* Loading screen uses opacity fade — don't hide it with display:none */
+#loading.hidden { display: flex !important; opacity: 0; pointer-events: none; }

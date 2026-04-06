@@ -4,10 +4,30 @@
 
 'use strict';
 
+// ── Access check helper ───────────────────────────────────────
+function requireGroup() {
+    if (!window.AUTH.isInDivision()) {
+        setContent(
+            '<div class="setup-wrap">' +
+            '<div class="ph"><div class="ey">Access Restricted</div>' +
+            '<h1>Members Only</h1>' +
+            '<div class="sub">You must be a member of the division group to submit forms.</div></div>' +
+            '</div>'
+        );
+        return true;
+    }
+    return false;
+}
+
 // ── Form: Event Log ───────────────────────────────────────────
 var EL = { host:'', attendees:[] };
 
 function renderFormEventLog() {
+    if (requireGroup()) return;
+    if (!window.AUTH.canSubmitOfficerForms()) {
+        setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Access Restricted</div><h1>Officers Only</h1><div class="sub">Requires rank 235+ in the division or rank 7+ in the ghost sub-division.</div></div></div>');
+        return;
+    }
     var h = pageHeader('Event Log','Record a hosted event') +
         '<div class="form-page"><div class="form-card">' +
         fHead('📋','Event Log','Submit a hosted event for tracking') +
@@ -75,6 +95,11 @@ function submitEL() {
 var EEL = { attendees:[], event:null };
 
 function renderFormEditEventLog() {
+    if (requireGroup()) return;
+    if (!window.AUTH.canSubmitOfficerForms()) {
+        setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Access Restricted</div><h1>Officers Only</h1><div class="sub">Requires rank 235+ in the division or rank 7+ in the ghost sub-division.</div></div></div>');
+        return;
+    }
     var h = pageHeader('Edit Event Log','Request a correction to an existing event log entry') +
         '<div class="form-page"><div class="form-card">' +
         fHead('✏️','Edit Event Log','Correction requests require admin approval via Discord') +
@@ -197,6 +222,7 @@ function submitEEL() {
 
 // ── Form: Stats Transfer ──────────────────────────────────────
 function renderFormTransfer() {
+    if (requireGroup()) return;
     var h = pageHeader('Stats Transfer','Request a username change or account transfer') +
         '<div class="form-page"><div class="form-card">' +
         fHead('🔄','Stats Transfer','Changes applied only after an admin approves via Discord.') +
@@ -256,6 +282,7 @@ function submitTR() {
 var EX = { username:'', departments:[] };
 
 function renderFormExemption() {
+    if (requireGroup()) return;
     var h = pageHeader('Exemption Request','Submit an activity exemption') +
         '<div class="form-page"><div class="form-card">' +
         fHead('🛡️','Exemption','Start date Mon–Thu · End date must be a Monday.') +
@@ -382,6 +409,7 @@ function submitEX() {
 var MA = { username:'', host:'' };
 
 function renderFormMissingAP() {
+    if (requireGroup()) return;
     var h = pageHeader('Missing AP Request','Request activity points for an unlogged event') +
         '<div class="form-page"><div class="form-card">' +
         fHead('⚡','Missing AP','Submit evidence of attendance for a missing AP award') +

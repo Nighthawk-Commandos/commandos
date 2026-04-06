@@ -20,6 +20,14 @@ var DEPT_CLASSES = {
     'Ghosts':'dp-ghosts','Progression':'dp-prog','Welfare':'dp-welfare',
     'Internal Affairs':'dp-ia','Librarium':'dp-lib'
 };
+// Department colours mirror the CSS dept-head-name colours
+var DEPT_COLOURS = {
+    'GHOSTS':'#674EA7','Ghosts':'#674EA7',
+    'PROGRESSION':'#3D85C6','Progression':'#3D85C6',
+    'WELFARE':'#A64D79','Welfare':'#A64D79',
+    'INTERNAL AFFAIRS':'#434343','Internal Affairs':'#434343',
+    'LIBRARIUM':'#F1C232','Librarium':'#F1C232'
+};
 var MEDAL_CLASSES = {
     'Legend':'md-legend','Cheerleader':'md-cheerleader',
     'Distinguished Officer':'md-dist-officer',
@@ -482,6 +490,88 @@ function docOutsideClick(pairs) {
         if (allGone) document.removeEventListener('click', handler);
     }
     document.addEventListener('click', handler);
+}
+
+// ── Admin Dashboard ───────────────────────────────────────────
+function renderAdminDashboard() {
+    var h = pageHeader('Admin Dashboard', 'Manage allowed users and system settings');
+    h += '<div class="admin-wrap">';
+    h += '<div class="info-block">';
+    h += '<h3>Admin Allowlist</h3>';
+    h += '<p class="admin-desc">Users on this list have full admin access regardless of rank. Only rank 246+ officers can edit this list.</p>';
+    h += '<div id="admin-list-wrap"><div class="field-hint italic">Loading…</div></div>';
+    h += '<div class="admin-add-row">' +
+        '<input type="text" id="admin-add-id" placeholder="Discord ID (e.g. 123456789012345678)" class="admin-input">' +
+        '<input type="text" id="admin-add-label" placeholder="Label / display name (optional)" class="admin-input">' +
+        '<button class="btn-primary" id="admin-add-btn">Add</button>' +
+        '</div>';
+    h += '</div>';
+    h += '</div>';
+
+    setContent(h);
+
+    // Load list
+    fetch('/api/admin/allowlist', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (list) { renderAllowlist(list); })
+        .catch(function () {
+            var w = $('admin-list-wrap');
+            if (w) w.innerHTML = '<div class="field-warn">Failed to load allowlist. Check your permissions.</div>';
+        });
+
+    // Add button
+    var addBtn = $('admin-add-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            var id    = (gv('admin-add-id') || '').trim();
+            var label = (gv('admin-add-label') || '').trim();
+            if (!id) return;
+            addBtn.disabled = true; addBtn.textContent = 'Adding…';
+            fetch('/api/admin/allowlist', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ discordId: id, label: label || id })
+            }).then(function (r) { return r.json(); })
+                .then(function (res) {
+                    addBtn.disabled = false; addBtn.textContent = 'Add';
+                    if (res.success) { sv('admin-add-id', ''); sv('admin-add-label', ''); renderAllowlist(res.list); }
+                    else toast('Error: ' + (res.error || 'Unknown'), 'error');
+                }).catch(function () { addBtn.disabled = false; addBtn.textContent = 'Add'; toast('Request failed', 'error'); });
+        });
+    }
+}
+
+function renderAllowlist(list) {
+    var w = $('admin-list-wrap'); if (!w) return;
+    if (!list || !list.length) {
+        w.innerHTML = '<div class="field-hint">No users on the allowlist.</div>';
+        return;
+    }
+    var rows = list.map(function (e) {
+        return '<div class="admin-list-row">' +
+            '<div class="admin-list-label">' + esc(e.label || e.discordId) + '</div>' +
+            '<div class="admin-list-id">' + esc(e.discordId) + '</div>' +
+            '<button class="admin-remove-btn" data-discord-id="' + esc(e.discordId) + '">Remove</button>' +
+            '</div>';
+    }).join('');
+    w.innerHTML = '<div class="admin-list">' + rows + '</div>';
+
+    // Wire remove buttons
+    w.querySelectorAll('.admin-remove-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = btn.dataset.discordId;
+            btn.disabled = true; btn.textContent = '…';
+            fetch('/api/admin/allowlist', {
+                method: 'DELETE', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ discordId: id })
+            }).then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) renderAllowlist(res.list);
+                    else { btn.disabled = false; btn.textContent = 'Remove'; toast('Error: ' + (res.error || 'Unknown'), 'error'); }
+                }).catch(function () { btn.disabled = false; btn.textContent = 'Remove'; });
+        });
+    });
 }
 
 // ── Form field helpers ────────────────────────────────────────

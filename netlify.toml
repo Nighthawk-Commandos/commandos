@@ -1,30 +1,52 @@
 # netlify.toml
 
 [build]
-publish = "."   # serve from repo root; change to "dist" if you add a build step
+publish = "."
+command = "npm install"
 
-# ── SPA routing ───────────────────────────────────────────────
-# All routes fall back to index.html (not needed for this SPA
-# since navigation is JS-only, but good to have for direct URLs)
+# ── Auth API redirects (must be before the SPA catch-all) ──────
+[[redirects]]
+from   = "/api/auth/discord"
+to     = "/.netlify/functions/auth-login"
+status = 200
+
+[[redirects]]
+from   = "/api/auth/discord/callback"
+to     = "/.netlify/functions/auth-callback"
+status = 200
+
+[[redirects]]
+from   = "/api/auth/me"
+to     = "/.netlify/functions/auth-me"
+status = 200
+
+[[redirects]]
+from   = "/api/auth/logout"
+to     = "/.netlify/functions/auth-logout"
+status = 200
+
+[[redirects]]
+from   = "/api/admin/allowlist"
+to     = "/.netlify/functions/admin-allowlist"
+status = 200
+
+# ── SPA fallback ───────────────────────────────────────────────
 [[redirects]]
 from   = "/*"
 to     = "/index.html"
 status = 200
 
-# ── Cache headers ─────────────────────────────────────────────
-# HTML: never cache (always fresh)
+# ── Cache headers ──────────────────────────────────────────────
 [[headers]]
 for = "/index.html"
 [headers.values]
 Cache-Control = "no-cache, no-store, must-revalidate"
 
-# config.js: never cache (URL changes here should apply immediately)
 [[headers]]
 for = "/config.js"
 [headers.values]
 Cache-Control = "no-cache, no-store, must-revalidate"
 
-# JS and CSS: cache for 1 week (add ?v=X to bust when needed)
 [[headers]]
 for = "/*.js"
 [headers.values]
@@ -35,12 +57,14 @@ for = "/*.css"
 [headers.values]
 Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
 
-# ── Security headers (applied to all pages) ───────────────────
+# ── Security headers ───────────────────────────────────────────
+# 'unsafe-inline' is required because dynamic HTML strings in render.js / forms.js
+# use inline onclick/onchange attributes. See render.js filterBtn(), buildAC(), etc.
 [[headers]]
 for = "/*"
 [headers.values]
-X-Frame-Options           = "DENY"
-X-Content-Type-Options    = "nosniff"
-Referrer-Policy           = "strict-origin-when-cross-origin"
-Permissions-Policy        = "camera=(), microphone=(), geolocation=()"
-Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com;"
+X-Frame-Options        = "DENY"
+X-Content-Type-Options = "nosniff"
+Referrer-Policy        = "strict-origin-when-cross-origin"
+Permissions-Policy     = "camera=(), microphone=(), geolocation=()"
+Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com;"
