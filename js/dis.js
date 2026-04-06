@@ -438,7 +438,10 @@ function _disAdminTiles(body) {
 
         html += '<tr>' +
             '<td>' + (pos + 1) + '</td>' +
-            '<td>' + esc(tile.eventType) + '</td>' +
+            '<td style="white-space:nowrap">' +
+            '<input id="dis-tet-' + pos + '" class="admin-input" value="' + esc(tile.eventType || '') + '" style="width:110px;padding:2px 4px;height:26px;font-size:12px"> ' +
+            '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" onclick="disSetTileEventType(' + pos + ')">Set</button>' +
+            '</td>' +
             '<td style="max-width:120px;white-space:normal">' + esc(tile.gameName || tile.gameId || '?') + '</td>' +
             '<td><span class="badge ' + statusCls + '">' + status + '</span></td>' +
             '<td>' + (tile.completedBy ? esc(tile.completedBy) : '<span style="color:var(--muted)">—</span>') + '</td>' +
@@ -573,9 +576,12 @@ function _disRenderGamePool(body) {
         pool.forEach(function (g, i) {
             html += '<tr>' +
                 '<td style="font-family:\'DM Mono\',monospace;font-size:11px">' + esc(String(g.gameId)) + '</td>' +
-                '<td>' + esc(g.name || '') + '</td>' +
-                '<td style="color:var(--muted);font-size:11px">' + esc((g.eventTypes || []).join(', ')) + '</td>' +
-                '<td style="text-align:right"><button class="admin-remove-btn" onclick="disRemoveGame(' + i + ')">Remove</button></td>' +
+                '<td><input id="dis-gp-edit-name-' + i + '" class="admin-input" value="' + esc(g.name || '') + '" style="width:130px;padding:2px 4px;height:26px;font-size:12px"></td>' +
+                '<td><input id="dis-gp-edit-types-' + i + '" class="admin-input" value="' + esc((g.eventTypes || []).join(', ')) + '" style="width:220px;padding:2px 4px;height:26px;font-size:12px"></td>' +
+                '<td style="text-align:right;white-space:nowrap">' +
+                '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" onclick="disEditGame(' + i + ')">Save</button> ' +
+                '<button class="admin-remove-btn" onclick="disRemoveGame(' + i + ')">Remove</button>' +
+                '</td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -801,6 +807,20 @@ function disAddGame() {
     _disSaveGamePool(pool);
 }
 
+function disEditGame(idx) {
+    var nameEl  = document.getElementById('dis-gp-edit-name-'  + idx);
+    var typesEl = document.getElementById('dis-gp-edit-types-' + idx);
+    var pool    = (_DIS.gamepool || []).slice();
+    if (!pool[idx]) { toast('Game not found', 'error'); return; }
+    var name       = nameEl  ? nameEl.value.trim()  : (pool[idx].name || '');
+    var eventTypes = typesEl
+        ? typesEl.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+        : pool[idx].eventTypes;
+    if (!eventTypes.length) { toast('Enter at least one event type', 'error'); return; }
+    pool[idx] = Object.assign({}, pool[idx], { name: name, eventTypes: eventTypes });
+    _disSaveGamePool(pool);
+}
+
 function disRemoveGame(idx) {
     if (!confirm('Remove this game from the pool?')) return;
     var pool = (_DIS.gamepool || []).slice();
@@ -823,6 +843,14 @@ function _disSaveGamePool(pool) {
             if (body) _disAdminGamePool(body);
         })
         .catch(function (e) { toast('Save failed: ' + e.message, 'error'); });
+}
+
+function disSetTileEventType(pos) {
+    var input = document.getElementById('dis-tet-' + pos);
+    if (!input) return;
+    var eventType = input.value.trim();
+    if (!eventType) { toast('Enter an event type', 'error'); return; }
+    _disAdminAction({ action: 'set-tile-eventtype', position: pos, eventType: eventType }, 'Event type updated');
 }
 
 // ── Generic admin action helper ────────────────────────────────

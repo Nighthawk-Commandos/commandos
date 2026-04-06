@@ -181,6 +181,26 @@ exports.handler = async (event) => {
         return json(200, { ok: true });
     }
 
+    // ── set-tile-eventtype ────────────────────────────────────────
+    if (body.action === 'set-tile-eventtype') {
+        const pos       = Number(body.position);
+        const eventType = typeof body.eventType === 'string' ? body.eventType.trim() : null;
+        if (isNaN(pos) || pos < 0 || pos > 24) return json(400, { error: 'Invalid position' });
+        if (!eventType) return json(400, { error: 'Event type required' });
+
+        let board = await store.get('board', { type: 'json' }).catch(() => null);
+        if (!board) return json(404, { error: 'No board' });
+
+        const prev = (board.tiles[pos] || {}).eventType || '';
+        board.tiles[pos] = Object.assign({}, board.tiles[pos], { eventType });
+        board.updatedAt  = new Date().toISOString();
+
+        await store.set('board', JSON.stringify(board));
+        await addAudit(store, adminId, 'SET_TILE_EVENTTYPE', { position: pos, prev, eventType });
+        await invalidateCache(store);
+        return json(200, { ok: true });
+    }
+
     // ── set-multiplier ────────────────────────────────────────────
     if (body.action === 'set-multiplier') {
         const val = Number(body.value);
