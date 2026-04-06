@@ -34,7 +34,7 @@ function verifySession(cookieHeader) {
 }
 
 // ── Admin gate ──────────────────────────────────────────────────
-// Returns null if the session passes (rank 246+ or on allowlist).
+// Returns null if the session passes (rank 246+ or on allowlist with any perm).
 // Returns a JSON error response if access is denied.
 async function requireAdmin(session) {
     if (!session) return json(401, { error: 'Unauthorized' });
@@ -44,6 +44,47 @@ async function requireAdmin(session) {
         if (allowlist.some(e => e.discordId === session.discordId)) return null;
     } catch {}
     return json(403, { error: 'Forbidden' });
+}
+
+// ── Granular permission check ────────────────────────────────────
+// Returns full permissions object for the session user.
+// Superadmin (rank 246+) always has all perms.
+const ALL_PERMS = ['roleManager','disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit','mfOfficers','mfRemote'];
+
+async function getUserAdminPerms(session, adminStore) {
+    if (!session) return null;
+    if (session.divisionRank >= 246) {
+        const perms = { superadmin: true };
+        ALL_PERMS.forEach(k => { perms[k] = true; });
+        return perms;
+    }
+    try {
+        const list  = await adminStore.get('allowlist', { type: 'json' }) || [];
+        const entry = list.find(e => e.discordId === session.discordId);
+        if (!entry) return null;
+        // If the entry references a role, derive permissions from that role
+        let p = entry.permissions || {};
+        if (entry.roleId) {
+            const roles = await adminStore.get('roles', { type: 'json' }).catch(() => []) || [];
+            const role  = roles.find(r => r.id === entry.roleId);
+            if (role) p = role.permissions || {};
+        }
+        const perms = { superadmin: false };
+        ALL_PERMS.forEach(k => { perms[k] = !!p[k]; });
+        return perms;
+    } catch { return null; }
+}
+
+// Returns null if session has the required permission, or a 403 response.
+async function requirePerm(session, adminStore, permKey) {
+    if (!session) return json(401, { error: 'Unauthorized' });
+    if (session.divisionRank >= 246) return null;
+    try {
+        const list  = await adminStore.get('allowlist', { type: 'json' }) || [];
+        const entry = list.find(e => e.discordId === session.discordId);
+        if (entry && entry.permissions && entry.permissions[permKey]) return null;
+    } catch {}
+    return json(403, { error: 'Forbidden: requires ' + permKey + ' permission' });
 }
 
 // ── JSON response helper ────────────────────────────────────────
@@ -66,4 +107,4 @@ async function invalidateCache(store) {
     try { await store.set('state-cache', ''); } catch {}
 }
 
-module.exports = { blobsStore, verifySession, requireAdmin, json, getCurrentWeekNumber, invalidateCache };
+module.exports = { blobsStore, verifySession, requireAdmin, getUserAdminPerms, requirePerm, ALL_PERMS, json, getCurrentWeekNumber, invalidateCache };

@@ -42,6 +42,15 @@ var HOME_SECTIONS = [
         desc:     'Competitive lock-out deployment grid — claim tiles by hosting events, earn raffle entries.',
         accessFn: function () { return window.AUTH.canSubmitOfficerForms(); },
         lockMsg:  'Requires rank 235 (Officer) or above.'
+    },
+    {
+        id:       'admin',
+        tag:      'ADM',
+        tagColor: 'var(--red)',
+        title:    'Admin Dashboard',
+        desc:     'System administration — role management, DIS moderation, audit logs.',
+        accessFn: function () { return window.AUTH.canAdminAny(); },
+        lockMsg:  'Admin access required.'
     }
     // ── Add new sections here ──────────────────────────────────
     // {
@@ -104,6 +113,11 @@ function enterSection(el) {
     if (section === 'mainframe')           { enterMainframe(); }
     else if (section === 'div-objectives') { enterObjectives(); }
     else if (section === 'deployment')     { enterDIS(); }
+    else if (section === 'admin')          { enterAdmin(); }
+}
+
+function enterAdmin() {
+    renderUnifiedAdmin();
 }
 
 function enterMainframe() {
@@ -160,8 +174,7 @@ var PAGES = {
     'form-editeventlog': renderFormEditEventLog,
     'form-transfer':     renderFormTransfer,
     'form-exemption':    renderFormExemption,
-    'form-missingap':    renderFormMissingAP,
-    'admin':             renderAdminDashboard
+    'form-missingap':    renderFormMissingAP
 };
 
 function go(key, el) {
@@ -183,7 +196,6 @@ function updateNavAccess() {
     if (!u) return;
     var inGroup    = u.divisionRank > 0;
     var canOfficer = u.divisionRank >= 235 || u.ghostRank >= 7;
-    var canAdmin   = u.divisionRank >= 246;
 
     // Officer-only forms
     ['form-eventlog', 'form-editeventlog'].forEach(function (key) {
@@ -195,11 +207,6 @@ function updateNavAccess() {
         var item = document.querySelector('.nav-item[data-key="' + key + '"]');
         if (item && !inGroup) item.style.display = 'none';
     });
-    // Admin nav
-    var adminItem  = document.getElementById('nav-admin');
-    var adminGroup = document.getElementById('nav-admin-group');
-    if (adminItem)  adminItem.style.display  = canAdmin ? '' : 'none';
-    if (adminGroup) adminGroup.style.display = canAdmin ? '' : 'none';
     // Rank in sidebar
     var rankEl = document.getElementById('sidebar-rank');
     if (rankEl) rankEl.textContent = u.divisionRoleName || ('Rank ' + u.divisionRank);
@@ -327,8 +334,11 @@ function loadMainframe() {
         if (!user) {
             document.getElementById('login-screen').classList.remove('hidden');
         } else {
-            document.getElementById('home-screen').classList.remove('hidden');
-            renderHomeScreen();
+            // Load admin perms in parallel, then show home screen
+            window.AUTH.loadAdminPerms().then(function () {
+                document.getElementById('home-screen').classList.remove('hidden');
+                renderHomeScreen();
+            });
         }
     });
 })();

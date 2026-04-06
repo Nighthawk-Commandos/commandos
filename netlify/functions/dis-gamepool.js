@@ -2,7 +2,7 @@
 // ── POST /api/dis/gamepool — save game pool (admin)
 'use strict';
 
-const { blobsStore, verifySession, requireAdmin, json } = require('./_shared');
+const { blobsStore, verifySession, getUserAdminPerms, json } = require('./_shared');
 
 exports.handler = async (event) => {
     const store = blobsStore('commandos-dis');
@@ -14,8 +14,9 @@ exports.handler = async (event) => {
 
     if (event.httpMethod === 'POST') {
         const session = verifySession(event.headers.cookie || event.headers.Cookie);
-        const authErr = await requireAdmin(session);
-        if (authErr) return authErr;
+        const adminStore = blobsStore('commandos-admin');
+        const perms = await getUserAdminPerms(session, adminStore);
+        if (!perms || !perms.disGamePool) return json(403, { error: 'Forbidden: requires disGamePool permission' });
 
         let body;
         try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }

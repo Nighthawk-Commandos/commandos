@@ -577,6 +577,78 @@ td.wrap-right { white-space: normal; word-break: break-all; text-align: right; }
 .admin-remove-btn:hover { background: rgba(224,82,82,.1); border-color: rgba(224,82,82,.6); }
 .admin-remove-btn:disabled { opacity: .4; cursor: not-allowed; }
 
+/* ── Admin role card grid ────────────────────────────────────── */
+.admin-section-title {
+    font-family: 'Syne', sans-serif; font-size: 10.5px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    margin-bottom: 12px;
+}
+.admin-role-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 10px; margin-bottom: 6px;
+}
+.admin-role-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+}
+.admin-role-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-role-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); }
+.admin-role-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.admin-role-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 9px;
+    cursor: pointer; border-radius: 4px; transition: all .12s;
+}
+.admin-role-btn:hover { border-color: rgba(200,164,74,.5); color: var(--accent); }
+.admin-role-btn.danger:hover { border-color: rgba(224,82,82,.6); color: var(--red); background: rgba(224,82,82,.06); }
+.admin-perm-pills { display: flex; flex-wrap: wrap; gap: 5px; min-height: 20px; }
+.admin-perm-pill {
+    font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 7px;
+    border-radius: 3px; background: rgba(200,164,74,.1); color: var(--accent);
+    border: 1px solid rgba(200,164,74,.22);
+}
+/* ── Permission toggle buttons (in role create/edit forms) ────── */
+.admin-perm-group { display: flex; flex-direction: column; gap: 5px; }
+.admin-perm-group-label {
+    font-size: 10px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase;
+}
+.admin-perm-toggles { display: flex; flex-wrap: wrap; gap: 5px; }
+.admin-perm-toggle {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 10px;
+    cursor: pointer; border-radius: 4px; transition: all .12s; user-select: none;
+}
+.admin-perm-toggle.on {
+    background: rgba(200,164,74,.1); border-color: rgba(200,164,74,.4); color: var(--accent);
+}
+.admin-perm-toggle:disabled { opacity: .35; cursor: not-allowed; }
+/* ── Role edit form layout ───────────────────────────────────── */
+.admin-role-edit-form { display: flex; flex-direction: column; gap: 10px; }
+.admin-role-form-row { display: flex; gap: 7px; align-items: center; }
+.admin-color-input {
+    width: 34px; height: 30px; padding: 2px 3px; flex-shrink: 0;
+    border: 1px solid var(--border); background: var(--surface2);
+    cursor: pointer; border-radius: 4px;
+}
+/* ── User list rows ──────────────────────────────────────────── */
+.admin-user-list { display: flex; flex-direction: column; gap: 0; margin-bottom: 6px; }
+.admin-user-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.admin-user-row:last-child { border-bottom: none; }
+.admin-user-label { color: var(--text); flex: 0 0 auto; min-width: 80px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-user-id { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.admin-role-select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 11px; padding: 4px 8px;
+    cursor: pointer; outline: none; border-radius: 4px; transition: border-color .12s;
+    max-width: 140px;
+}
+.admin-role-select:focus { border-color: rgba(200,164,74,.4); }
+.admin-role-select:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ── App hidden initially ────────────────────────────────────── */
 #app.hidden { display: none !important; }
 

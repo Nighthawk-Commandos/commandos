@@ -104,9 +104,6 @@
             <div class="nav-item" data-key="form-transfer"     ><span class="nav-dot"></span>Stats Transfer</div>
             <div class="nav-item" data-key="form-exemption"    ><span class="nav-dot"></span>Exemption</div>
             <div class="nav-item" data-key="form-missingap"    ><span class="nav-dot"></span>Missing AP</div>
-            <!-- Admin section (hidden until rank 246+ confirmed) -->
-            <div class="nav-group" id="nav-admin-group" style="display:none">Admin</div>
-            <div class="nav-item" data-key="admin" id="nav-admin" style="display:none"><span class="nav-dot"></span>Admin Dashboard</div>
         </nav>
 
         <!-- Profile card at bottom of sidebar -->
@@ -164,15 +161,6 @@
         window.location.href = '/api/auth/discord';
     });
 
-    // Admin nav group visibility mirror
-    var adminItem = document.getElementById('nav-admin');
-    var adminGroup = document.getElementById('nav-admin-group');
-    if (adminItem) {
-        var observer = new MutationObserver(function () {
-            if (adminGroup) adminGroup.style.display = adminItem.style.display;
-        });
-        observer.observe(adminItem, { attributes: true, attributeFilter: ['style'] });
-    }
 })();
 </script>
 </body>

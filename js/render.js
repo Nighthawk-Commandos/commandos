@@ -492,86 +492,487 @@ function docOutsideClick(pairs) {
     document.addEventListener('click', handler);
 }
 
-// ── Admin Dashboard ───────────────────────────────────────────
-function renderAdminDashboard() {
-    var h = pageHeader('Admin Dashboard', 'Manage allowed users and system settings');
-    h += '<div class="admin-wrap">';
-    h += '<div class="info-block">';
-    h += '<h3>Admin Allowlist</h3>';
-    h += '<p class="admin-desc">Users on this list have full admin access regardless of rank. Only rank 246+ officers can edit this list.</p>';
-    h += '<div id="admin-list-wrap"><div class="field-hint italic">Loading…</div></div>';
-    h += '<div class="admin-add-row">' +
-        '<input type="text" id="admin-add-id" placeholder="Discord ID (e.g. 123456789012345678)" class="admin-input">' +
-        '<input type="text" id="admin-add-label" placeholder="Label / display name (optional)" class="admin-input">' +
-        '<button class="btn-primary" id="admin-add-btn">Add</button>' +
-        '</div>';
-    h += '</div>';
-    h += '</div>';
+// ═══════════════════════════════════════════════════════════════
+//  Unified Admin Dashboard
+// ═══════════════════════════════════════════════════════════════
 
-    setContent(h);
+window._ADMIN = { tab: null, roles: [], list: [] };
 
-    // Load list
-    fetch('/api/admin/allowlist', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (list) { renderAllowlist(list); })
-        .catch(function () {
-            var w = $('admin-list-wrap');
-            if (w) w.innerHTML = '<div class="field-warn">Failed to load allowlist. Check your permissions.</div>';
-        });
+// Permission definitions (flat list — used for pill rendering and toggle lookup)
+var ADMIN_PERM_DEFS = [
+    { key: 'roleManager', label: 'Role Manager', superadminOnly: true  },
+    { key: 'mfOfficers',  label: 'Officers',     superadminOnly: false },
+    { key: 'mfRemote',    label: 'Remote',        superadminOnly: false },
+    { key: 'disSync',     label: 'Sync',          superadminOnly: false },
+    { key: 'disTiles',    label: 'Tiles',         superadminOnly: false },
+    { key: 'disPoints',   label: 'Points',        superadminOnly: false },
+    { key: 'disRaffle',   label: 'Raffle',        superadminOnly: false },
+    { key: 'disGamePool', label: 'Game Pool',     superadminOnly: false },
+    { key: 'disAudit',    label: 'Audit',         superadminOnly: false }
+];
 
-    // Add button
-    var addBtn = $('admin-add-btn');
-    if (addBtn) {
-        addBtn.addEventListener('click', function () {
-            var id    = (gv('admin-add-id') || '').trim();
-            var label = (gv('admin-add-label') || '').trim();
-            if (!id) return;
-            addBtn.disabled = true; addBtn.textContent = 'Adding…';
-            fetch('/api/admin/allowlist', {
-                method: 'POST', credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ discordId: id, label: label || id })
-            }).then(function (r) { return r.json(); })
-                .then(function (res) {
-                    addBtn.disabled = false; addBtn.textContent = 'Add';
-                    if (res.success) { sv('admin-add-id', ''); sv('admin-add-label', ''); renderAllowlist(res.list); }
-                    else toast('Error: ' + (res.error || 'Unknown'), 'error');
-                }).catch(function () { addBtn.disabled = false; addBtn.textContent = 'Add'; toast('Request failed', 'error'); });
-        });
-    }
-}
+// Permission groups — used to render toggles in role create/edit forms
+var ADMIN_PERM_GROUPS = [
+    { label: 'System',    keys: ['roleManager'] },
+    { label: 'Mainframe', keys: ['mfOfficers', 'mfRemote'] },
+    { label: 'DIS',       keys: ['disSync', 'disTiles', 'disPoints', 'disRaffle', 'disGamePool', 'disAudit'] }
+];
 
-function renderAllowlist(list) {
-    var w = $('admin-list-wrap'); if (!w) return;
-    if (!list || !list.length) {
-        w.innerHTML = '<div class="field-hint">No users on the allowlist.</div>';
+function renderUnifiedAdmin() {
+    var ap = window.AUTH.adminPerms;
+    var hs = document.getElementById('home-screen');
+    if (!hs) return;
+
+    // Determine which tabs the user can see
+    var tabDefs = [
+        { key: 'roles',     label: 'Roles',     canSee: window.AUTH.canAdminTab('roles')     },
+        { key: 'mainframe', label: 'Mainframe', canSee: window.AUTH.canAdminTab('mainframe') },
+        { key: 'sync',      label: 'Sync',      canSee: window.AUTH.canAdminTab('sync')      },
+        { key: 'tiles',     label: 'Tiles',     canSee: window.AUTH.canAdminTab('tiles')     },
+        { key: 'points',    label: 'Points',    canSee: window.AUTH.canAdminTab('points')    },
+        { key: 'raffle',    label: 'Raffle',    canSee: window.AUTH.canAdminTab('raffle')    },
+        { key: 'gamepool',  label: 'Game Pool', canSee: window.AUTH.canAdminTab('gamepool')  },
+        { key: 'audit',     label: 'Audit Log', canSee: window.AUTH.canAdminTab('audit')     }
+    ].filter(function (t) { return t.canSee; });
+
+    if (tabDefs.length === 0) {
+        hs.innerHTML =
+            '<div class="bg-grid"></div><div class="home-inner" style="padding-top:40px">' +
+            '<div class="dis-wrap"><div class="info-block">' +
+            '<p class="admin-desc">You do not have any admin permissions.</p>' +
+            '<button class="btn-ghost" style="margin-top:12px" data-click="showHomeScreen">&#8592; Back to Hub</button>' +
+            '</div></div></div>';
         return;
     }
-    var rows = list.map(function (e) {
-        return '<div class="admin-list-row">' +
-            '<div class="admin-list-label">' + esc(e.label || e.discordId) + '</div>' +
-            '<div class="admin-list-id">' + esc(e.discordId) + '</div>' +
-            '<button class="admin-remove-btn" data-discord-id="' + esc(e.discordId) + '">Remove</button>' +
-            '</div>';
-    }).join('');
-    w.innerHTML = '<div class="admin-list">' + rows + '</div>';
 
-    // Wire remove buttons
-    w.querySelectorAll('.admin-remove-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var id = btn.dataset.discordId;
-            btn.disabled = true; btn.textContent = '…';
-            fetch('/api/admin/allowlist', {
-                method: 'DELETE', credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ discordId: id })
-            }).then(function (r) { return r.json(); })
-                .then(function (res) {
-                    if (res.success) renderAllowlist(res.list);
-                    else { btn.disabled = false; btn.textContent = 'Remove'; toast('Error: ' + (res.error || 'Unknown'), 'error'); }
-                }).catch(function () { btn.disabled = false; btn.textContent = 'Remove'; });
-        });
+    // Pick default tab if needed
+    if (!_ADMIN.tab || !tabDefs.some(function (t) { return t.key === _ADMIN.tab; })) {
+        _ADMIN.tab = tabDefs[0].key;
+    }
+
+    var tabHtml = tabDefs.map(function (t) {
+        return '<button class="dis-admin-tab' + (_ADMIN.tab === t.key ? ' active' : '') +
+            '" onclick="adminTab(\'' + t.key + '\')">' + esc(t.label) + '</button>';
+    }).join('');
+
+    hs.innerHTML =
+        '<div class="bg-grid"></div>' +
+        '<div class="home-inner" style="padding-top:40px">' +
+        '<div class="dis-wrap">' +
+        '<div class="dis-header">' +
+        '<div class="dis-header-left">' +
+        '<div class="dis-eyebrow">NIGHTHAWK COMMANDOS &mdash; SYSTEM</div>' +
+        '<div class="dis-title">Admin Dashboard</div>' +
+        '</div>' +
+        '<div class="dis-nav">' +
+        '<button class="dis-nav-btn" data-click="showHomeScreen">&#8592; Hub</button>' +
+        '</div>' +
+        '</div>' +
+        '<div class="dis-admin-tabs">' + tabHtml + '</div>' +
+        '<div id="admin-body"></div>' +
+        '</div></div>';
+
+    _adminRenderTab();
+}
+
+function adminTab(key) {
+    _ADMIN.tab = key;
+    var tabs = document.querySelectorAll('.dis-admin-tab');
+    tabs.forEach(function (b) {
+        b.classList.toggle('active', b.textContent.trim() === _getAdminTabLabel(key));
     });
+    // Re-match by onclick attribute is cleaner:
+    tabs.forEach(function (b) {
+        b.classList.remove('active');
+        if (b.getAttribute('onclick') === 'adminTab(\'' + key + '\')') b.classList.add('active');
+    });
+    _adminRenderTab();
+}
+
+function _getAdminTabLabel(key) {
+    var map = { roles: 'Roles', mainframe: 'Mainframe', sync: 'Sync', tiles: 'Tiles', points: 'Points', raffle: 'Raffle', gamepool: 'Game Pool', audit: 'Audit Log' };
+    return map[key] || key;
+}
+
+function _adminRenderTab() {
+    var body = document.getElementById('admin-body');
+    if (!body) return;
+    var tab = _ADMIN.tab;
+    if (tab === 'roles')     { _adminRenderRoles(body);     return; }
+    if (tab === 'mainframe') { _adminRenderMainframe(body); return; }
+    _adminRenderDisTab(tab, body);
+}
+
+// ── Mainframe tab ─────────────────────────────────────────────
+function _adminRenderMainframe(body) {
+    var ap = window.AUTH.adminPerms || {};
+    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var canOfficers  = isSuperadmin || !!ap.mfOfficers;
+    var canRemote    = isSuperadmin || !!ap.mfRemote;
+
+    var html =
+        '<div class="info-block" style="margin-bottom:16px">' +
+        '<h3>Mainframe Admin</h3>' +
+        '<p class="admin-desc">Administrative tools for the Commandos Mainframe.</p></div>';
+
+    if (canOfficers) {
+        html +=
+            '<div class="info-block" style="margin-bottom:16px">' +
+            '<h3>Officers Tracker</h3>' +
+            '<p class="admin-desc" id="admin-mf-officers-desc">Manage officers — add or remove entries from the tracker.</p>' +
+            '<div id="admin-mf-officers"><p class="admin-desc" style="color:var(--muted)">Coming soon.</p></div>' +
+            '</div>';
+    }
+
+    if (canRemote) {
+        html +=
+            '<div class="info-block" style="margin-bottom:16px">' +
+            '<h3>Remote Functions</h3>' +
+            '<p class="admin-desc">Run administrative functions against the mainframe data.</p>' +
+            '<div id="admin-mf-remote"><p class="admin-desc" style="color:var(--muted)">Coming soon.</p></div>' +
+            '</div>';
+    }
+
+    body.innerHTML = html;
+}
+
+// ── DIS tab wrapper (ensures state is loaded first) ───────────
+function _adminRenderDisTab(tabKey, body) {
+    if (!_DIS.state) {
+        body.innerHTML = '<div class="obj-loading">Loading DIS state\u2026</div>';
+        fetch('/api/dis/state')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                _DIS.state = data;
+                _adminRenderDisTabContent(tabKey, body);
+            })
+            .catch(function (e) {
+                body.innerHTML = '<div class="obj-error">Failed to load DIS state: ' + esc(e.message) + '</div>';
+            });
+        return;
+    }
+    _adminRenderDisTabContent(tabKey, body);
+}
+
+function _adminRenderDisTabContent(tabKey, body) {
+    if (tabKey === 'sync')          _disAdminSync(body);
+    else if (tabKey === 'tiles')    _disAdminTiles(body);
+    else if (tabKey === 'points')   _disAdminPoints(body);
+    else if (tabKey === 'raffle')   _disAdminRaffle(body);
+    else if (tabKey === 'gamepool') _disAdminGamePool(body);
+    else if (tabKey === 'audit')    _disAdminAudit(body);
+}
+
+// After a DIS admin action succeeds, refresh the tab content
+function _adminRefreshDisTab() {
+    var body = document.getElementById('admin-body');
+    if (!body) return;
+    fetch('/api/dis/state')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            _DIS.state = data;
+            _adminRenderDisTabContent(_ADMIN.tab, body);
+        });
+}
+
+// ── Roles tab ─────────────────────────────────────────────────
+function adminPermToggle(btn) {
+    btn.classList.toggle('on');
+}
+
+function _readPermToggles(container) {
+    var perms = {};
+    container.querySelectorAll('.admin-perm-toggle').forEach(function (btn) {
+        perms[btn.dataset.perm] = btn.classList.contains('on');
+    });
+    return perms;
+}
+
+// Renders grouped permission toggle buttons for create/edit forms
+function _adminRenderPermToggles(existingPerms) {
+    var ap = window.AUTH.adminPerms || {};
+    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var defsMap = {};
+    ADMIN_PERM_DEFS.forEach(function (d) { defsMap[d.key] = d; });
+    var html = '';
+    ADMIN_PERM_GROUPS.forEach(function (g) {
+        var visible = g.keys.filter(function (k) {
+            var d = defsMap[k];
+            return d && (!d.superadminOnly || isSuperadmin);
+        });
+        if (!visible.length) return;
+        html += '<div class="admin-perm-group"><div class="admin-perm-group-label">' + esc(g.label) + '</div><div class="admin-perm-toggles">';
+        visible.forEach(function (k) {
+            var d = defsMap[k];
+            var isOn = !!(existingPerms && existingPerms[k]);
+            var canToggle = isSuperadmin || (k !== 'roleManager' && !!ap[k]);
+            html += '<button type="button" class="admin-perm-toggle' + (isOn ? ' on' : '') + '" data-perm="' + esc(k) + '"' +
+                (canToggle ? ' onclick="adminPermToggle(this)"' : ' disabled') + '>' + esc(d.label) + '</button>';
+        });
+        html += '</div></div>';
+    });
+    return html;
+}
+
+function _adminRenderRoles(body) {
+    body.innerHTML = '<div class="obj-loading">Loading\u2026</div>';
+    Promise.all([
+        fetch('/api/admin/roles',     { credentials: 'same-origin' }).then(function (r) { return r.json(); }),
+        fetch('/api/admin/allowlist', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+    ]).then(function (results) {
+        _adminBuildRolesUI(body, Array.isArray(results[0]) ? results[0] : [], Array.isArray(results[1]) ? results[1] : []);
+    }).catch(function (e) {
+        body.innerHTML = '<div class="obj-error">Failed to load: ' + esc(e.message) + '</div>';
+    });
+}
+
+function _adminBuildRolesUI(body, roles, list) {
+    window._ADMIN.roles = roles;
+    window._ADMIN.list  = list;
+    var ap = window.AUTH.adminPerms || {};
+    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var canManage = isSuperadmin || !!ap.roleManager;
+
+    var html = '';
+
+    // ── Section 1: Role Templates ─────────────────────────────
+    html += '<div class="admin-section-title">Role Templates</div><div class="admin-role-grid">';
+
+    roles.forEach(function (role) {
+        var enabledPerms = ADMIN_PERM_DEFS.filter(function (d) { return role.permissions && role.permissions[d.key]; });
+        html += '<div class="admin-role-card" style="border-left-color:' + esc(role.color || '#7c4ab8') + '" id="admin-role-card-' + esc(role.id) + '">' +
+            _adminRoleCardViewHTML(role, enabledPerms, canManage) + '</div>';
+    });
+
+    if (canManage) {
+        html += '<div class="admin-role-card" style="border-left-color:var(--border)">' +
+            '<div id="admin-new-role-collapsed">' +
+            '<button class="btn-dis-primary" style="width:100%;font-size:12px" onclick="adminShowNewRole()">+ Create Role</button>' +
+            '</div>' +
+            '<div id="admin-new-role-expanded" style="display:none" class="admin-role-edit-form">' +
+            '<div class="admin-role-form-row">' +
+            '<input id="admin-new-role-name" class="admin-input" placeholder="Role name" style="flex:1;min-width:0">' +
+            '<input id="admin-new-role-color" class="admin-color-input" type="color" value="#7c4ab8">' +
+            '</div>' +
+            _adminRenderPermToggles({}) +
+            '<div class="admin-role-form-row" style="margin-top:4px">' +
+            '<button class="btn-dis-primary" style="flex:1;font-size:12px" onclick="adminSaveNewRole()">Save Role</button>' +
+            '<button class="admin-role-btn" style="white-space:nowrap" onclick="adminCancelNewRole()">Cancel</button>' +
+            '</div></div></div>';
+    }
+
+    html += '</div>'; // end grid
+
+    // ── Section 2: Users ─────────────────────────────────────
+    html += '<div class="admin-section-title" style="margin-top:28px">Assigned Users</div>';
+
+    if (list.length) {
+        html += '<div class="admin-user-list">';
+        list.forEach(function (e) {
+            html += '<div class="admin-user-row">' +
+                '<div class="admin-user-label">' + esc(e.label || e.discordId) + '</div>' +
+                '<div class="admin-user-id">' + esc(e.discordId) + '</div>';
+            if (canManage) {
+                html += _adminRoleSelectHTML(roles, e.roleId || '', e.discordId) +
+                    '<button class="admin-remove-btn" onclick="adminRemoveUser(\'' + esc(e.discordId) + '\')">Remove</button>';
+            } else {
+                var assignedRole = e.roleId ? roles.find(function (r) { return r.id === e.roleId; }) : null;
+                html += '<span style="font-size:11px;color:var(--muted)">' + esc(assignedRole ? assignedRole.name : '—') + '</span>';
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+    } else {
+        html += '<div class="empty" style="margin-bottom:16px">No users on the admin list.</div>';
+    }
+
+    if (canManage) {
+        html += '<div class="info-block" style="margin-top:12px"><h3>Add User</h3>' +
+            '<div class="dis-inline-form" style="margin-bottom:10px">' +
+            '<input id="admin-new-user-id" class="admin-input" placeholder="Discord ID" style="width:180px">' +
+            '<input id="admin-new-user-label" class="admin-input" placeholder="Display name (optional)" style="flex:1">' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+            '<label style="font-size:12px;color:var(--muted)">Role:</label>' +
+            _adminRoleSelectHTML(roles, '', 'new-user') +
+            '</div>' +
+            '<button class="btn-dis-primary" onclick="adminAddUser()">Add User</button></div>';
+    }
+
+    body.innerHTML = html;
+}
+
+// ── Role card view HTML (injected inside the card wrapper) ────
+function _adminRoleCardViewHTML(role, enabledPerms, canManage) {
+    var html = '<div class="admin-role-card-header"><div class="admin-role-name">' + esc(role.name) + '</div>';
+    if (canManage) {
+        html += '<div class="admin-role-actions">' +
+            '<button class="admin-role-btn" onclick="adminEditRole(\'' + esc(role.id) + '\')">Edit</button>' +
+            '<button class="admin-role-btn danger" onclick="adminDeleteRole(\'' + esc(role.id) + '\')">Delete</button>' +
+            '</div>';
+    }
+    html += '</div><div class="admin-perm-pills">';
+    if (enabledPerms.length) {
+        enabledPerms.forEach(function (d) { html += '<span class="admin-perm-pill">' + esc(d.label) + '</span>'; });
+    } else {
+        html += '<span style="font-size:11px;color:var(--muted)">No permissions</span>';
+    }
+    return html + '</div>';
+}
+
+// ── Role <select> helper ──────────────────────────────────────
+function _adminRoleSelectHTML(roles, currentRoleId, discordId) {
+    var isNew = (discordId === 'new-user');
+    var html = '<select class="admin-role-select"' +
+        (isNew ? ' id="admin-new-user-role"' : ' onchange="adminAssignRole(this,\'' + esc(discordId) + '\')"') + '>';
+    html += '<option value=""' + (!currentRoleId ? ' selected' : '') + '>\u2014 No role</option>';
+    roles.forEach(function (r) {
+        html += '<option value="' + esc(r.id) + '"' + (r.id === currentRoleId ? ' selected' : '') + '>' + esc(r.name) + '</option>';
+    });
+    return html + '</select>';
+}
+
+// ── Role card inline edit ─────────────────────────────────────
+function adminEditRole(id) {
+    var role = (_ADMIN.roles || []).find(function (r) { return r.id === id; });
+    if (!role) return;
+    var card = document.getElementById('admin-role-card-' + id);
+    if (!card) return;
+    card.innerHTML = '<div class="admin-role-edit-form">' +
+        '<div class="admin-role-form-row">' +
+        '<input id="admin-edit-role-name" class="admin-input" value="' + esc(role.name) + '" style="flex:1;min-width:0">' +
+        '<input id="admin-edit-role-color" class="admin-color-input" type="color" value="' + esc(role.color || '#7c4ab8') + '">' +
+        '</div>' +
+        _adminRenderPermToggles(role.permissions || {}) +
+        '<div class="admin-role-form-row" style="margin-top:4px">' +
+        '<button class="btn-dis-primary" style="flex:1;font-size:12px" onclick="adminSaveRole(\'' + esc(id) + '\')">Save</button>' +
+        '<button class="admin-role-btn" style="white-space:nowrap" onclick="adminCancelEditRole(\'' + esc(id) + '\')">Cancel</button>' +
+        '</div></div>';
+    var colorInput = document.getElementById('admin-edit-role-color');
+    if (colorInput) colorInput.addEventListener('input', function () { card.style.borderLeftColor = colorInput.value; });
+}
+
+function adminCancelEditRole(id) {
+    var role = (_ADMIN.roles || []).find(function (r) { return r.id === id; });
+    if (!role) { _adminReloadRoles(); return; }
+    var card = document.getElementById('admin-role-card-' + id);
+    if (!card) return;
+    var ap = window.AUTH.adminPerms || {};
+    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var enabledPerms = ADMIN_PERM_DEFS.filter(function (d) { return role.permissions && role.permissions[d.key]; });
+    card.innerHTML = _adminRoleCardViewHTML(role, enabledPerms, isSuperadmin || !!ap.roleManager);
+}
+
+function adminSaveRole(id) {
+    var card = document.getElementById('admin-role-card-' + id);
+    if (!card) return;
+    var name  = (document.getElementById('admin-edit-role-name')  || {}).value || '';
+    var color = (document.getElementById('admin-edit-role-color') || {}).value || '#7c4ab8';
+    name = name.trim();
+    if (!name) { toast('Role name required', 'error'); return; }
+    fetch('/api/admin/roles', {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, name: name, color: color, permissions: _readPermToggles(card) })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('Role updated', 'success'); _adminReloadRoles(); }
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
+
+function adminDeleteRole(id) {
+    if (!confirm('Delete this role? Users assigned to it will lose their permissions.')) return;
+    fetch('/api/admin/roles', {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('Role deleted', 'success'); _adminReloadRoles(); }
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
+
+function adminShowNewRole() {
+    var c = document.getElementById('admin-new-role-collapsed');
+    var e = document.getElementById('admin-new-role-expanded');
+    if (c) c.style.display = 'none';
+    if (e) e.style.display = '';
+}
+
+function adminCancelNewRole() {
+    var c = document.getElementById('admin-new-role-collapsed');
+    var e = document.getElementById('admin-new-role-expanded');
+    if (c) c.style.display = '';
+    if (e) e.style.display = 'none';
+}
+
+function adminSaveNewRole() {
+    var name  = ((document.getElementById('admin-new-role-name')  || {}).value || '').trim();
+    var color = (document.getElementById('admin-new-role-color')  || {}).value || '#7c4ab8';
+    if (!name) { toast('Role name required', 'error'); return; }
+    var expanded = document.getElementById('admin-new-role-expanded');
+    fetch('/api/admin/roles', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, color: color, permissions: expanded ? _readPermToggles(expanded) : {} })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('Role created', 'success'); _adminReloadRoles(); }
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
+
+// ── User management ────────────────────────────────────────────
+function adminAssignRole(selectEl, discordId) {
+    selectEl.disabled = true;
+    fetch('/api/admin/allowlist', {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discordId: discordId, roleId: selectEl.value })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('Role assigned', 'success'); _adminReloadRoles(); }
+            else { selectEl.disabled = false; toast('Error: ' + (res.error || 'Unknown'), 'error'); }
+        }).catch(function () { selectEl.disabled = false; toast('Request failed', 'error'); });
+}
+
+function adminAddUser() {
+    var id     = ((document.getElementById('admin-new-user-id')    || {}).value || '').trim();
+    var label  = ((document.getElementById('admin-new-user-label') || {}).value || '').trim();
+    var roleEl = document.getElementById('admin-new-user-role');
+    var roleId = roleEl ? roleEl.value : '';
+    if (!id) { toast('Enter a Discord ID', 'error'); return; }
+    var body = { discordId: id, label: label || id };
+    if (roleId) body.roleId = roleId;
+    fetch('/api/admin/allowlist', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('User added', 'success'); _adminReloadRoles(); }
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
+
+function adminRemoveUser(discordId) {
+    if (!confirm('Remove this user from the admin list?')) return;
+    fetch('/api/admin/allowlist', {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discordId: discordId })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('User removed', 'success'); _adminReloadRoles(); }
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
+
+function _adminReloadRoles() {
+    var body = document.getElementById('admin-body');
+    if (body && _ADMIN.tab === 'roles') _adminRenderRoles(body);
 }
 
 // ── Form field helpers ────────────────────────────────────────

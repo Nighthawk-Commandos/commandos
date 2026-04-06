@@ -1,10 +1,10 @@
 // ── POST /api/dis/admin — all admin actions for the DIS
 // Actions: unlock-tile, lock-tile, force-claim, adjust-points,
-//          adjust-raffle, set-multiplier, reset-week,
-//          regenerate-board, get-audit
+//          adjust-raffle, set-multiplier, set-tile-eventtype,
+//          reset-week, regenerate-board, get-audit
 'use strict';
 
-const { blobsStore, verifySession, requireAdmin, json, getCurrentWeekNumber, invalidateCache } = require('./_shared');
+const { blobsStore, verifySession, getUserAdminPerms, json, getCurrentWeekNumber, invalidateCache } = require('./_shared');
 
 async function addAudit(store, adminId, action, details) {
     let log;
@@ -15,15 +15,42 @@ async function addAudit(store, adminId, action, details) {
     await store.set('audit', JSON.stringify(log));
 }
 
+// Permission required per action
+const ACTION_PERMS = {
+    'unlock-tile':        'disTiles',
+    'lock-tile':          'disTiles',
+    'force-claim':        'disTiles',
+    'set-tile-points':    'disTiles',
+    'set-tile-eventtype': 'disTiles',
+    'adjust-points':      'disPoints',
+    'adjust-raffle':      'disRaffle',
+    'set-multiplier':     'disSync',
+    'reset-week':         'disSync',
+    'regenerate-board':   'disSync',
+    'get-audit':          'disAudit'
+};
+
 exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
-    const authErr = await requireAdmin(session);
-    if (authErr) return authErr;
+    if (!session) return json(401, { error: 'Unauthorized' });
 
     let body;
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
+
+    // Check permission for this specific action
+    const adminStore = blobsStore('commandos-admin');
+    const perms = await getUserAdminPerms(session, adminStore);
+    if (!perms) return json(403, { error: 'Forbidden' });
+
+    const requiredPerm = ACTION_PERMS[body.action];
+    if (requiredPerm && !perms[requiredPerm]) {
+        return json(403, { error: 'Forbidden: requires ' + requiredPerm + ' permission' });
+    }
+    if (!requiredPerm && !perms.superadmin) {
+        return json(403, { error: 'Forbidden: unknown action' });
+    }
 
     const store   = blobsStore('commandos-dis');
     const adminId = session.robloxUsername || session.discordId;

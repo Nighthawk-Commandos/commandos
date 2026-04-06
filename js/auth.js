@@ -5,8 +5,9 @@
 'use strict';
 
 window.AUTH = {
-    user:   null,   // null = not logged in, object = session data
-    loaded: false,
+    user:       null,   // null = not logged in, object = session data
+    loaded:     false,
+    adminPerms: null,   // null = not loaded; object = { superadmin, roleManager, disSync, ... }
 
     // ── Load current session from server ──────────────────────
     load: function () {
@@ -25,6 +26,14 @@ window.AUTH = {
                 window.AUTH.loaded = true;
                 return null;
             });
+    },
+
+    // ── Load admin permissions from server ────────────────────
+    loadAdminPerms: function () {
+        return fetch('/api/admin/perms', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) { window.AUTH.adminPerms = data || null; })
+            .catch(function () { window.AUTH.adminPerms = null; });
     },
 
     // ── Access helpers ────────────────────────────────────────
@@ -46,10 +55,35 @@ window.AUTH = {
         var u = window.AUTH.user;
         return !!(u && u.divisionRank >= 243);
     },
-    // Admin dashboard: rank 246+ OR on the allowlist (checked server-side too)
+    // Legacy: still used in dis.js raffle view
     canAccessAdmin: function () {
+        return window.AUTH.canAdminAny();
+    },
+    // Unified admin: rank 246+ OR any admin permission granted
+    canAdminAny: function () {
         var u = window.AUTH.user;
-        return !!(u && u.divisionRank >= 246);
+        if (u && u.divisionRank >= 246) return true;
+        var p = window.AUTH.adminPerms;
+        return !!(p && (p.roleManager || p.disSync || p.disTiles || p.disPoints || p.disRaffle || p.disGamePool || p.disAudit || p.mfOfficers || p.mfRemote));
+    },
+    // Check if user can access a specific admin tab
+    canAdminTab: function (tab) {
+        var u = window.AUTH.user;
+        if (u && u.divisionRank >= 246) return true;
+        var p = window.AUTH.adminPerms;
+        if (!p) return false;
+        var map = {
+            roles:      'roleManager',
+            sync:       'disSync',
+            tiles:      'disTiles',
+            points:     'disPoints',
+            raffle:     'disRaffle',
+            gamepool:   'disGamePool',
+            audit:      'disAudit',
+            mainframe:  null   // mainframe tab visible if ANY mf perm is held
+        };
+        if (tab === 'mainframe') return !!(p.mfOfficers || p.mfRemote);
+        return !!p[map[tab]];
     },
 
     // ── Logout ────────────────────────────────────────────────

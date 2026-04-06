@@ -11,8 +11,7 @@ var _DIS = {
     state:     null,       // { tiles, globalMultiplier, weekNumber, leaderboard, stats, lastSyncAt }
     stateHash: null,       // JSON fingerprint of last rendered state
     gamepool:  null,       // [{ gameId, name, eventTypes }]
-    view:      'board',    // 'board' | 'lb' | 'raffle' | 'admin'
-    adminTab:  'sync',     // 'sync' | 'tiles' | 'points' | 'raffle' | 'gamepool' | 'audit'
+    view:      'board',    // 'board' | 'lb' | 'raffle'
     poll:      null,
     loading:   false
 };
@@ -20,7 +19,6 @@ var _DIS = {
 // ── Entry point ───────────────────────────────────────────────
 function renderDISSection() {
     _DIS.view = 'board';
-    _DIS.adminTab = 'sync';
     _DIS.stateHash = null; // force full render on first load
     _disPaint();
     _disLoad(true);
@@ -80,7 +78,6 @@ function _disLoad(showSpinner) {
             var newHash = JSON.stringify(data);
             var unchanged = newHash === _DIS.stateHash;
             _DIS.state = data;
-            if (_DIS.view === 'admin') return; // never clobber admin inputs
             if (unchanged) return;             // nothing changed, skip re-render
             _DIS.stateHash = newHash;
             // Partial update for board view; full re-render for leaderboard/raffle
@@ -103,7 +100,6 @@ function _disLoad(showSpinner) {
 function _disPaint() {
     var hs = document.getElementById('home-screen');
     if (!hs) return;
-    var isAdmin = window.AUTH && window.AUTH.canAccessAdmin && window.AUTH.canAccessAdmin();
     var wk = (_DIS.state && _DIS.state.weekNumber) ? _DIS.state.weekNumber : _disWeek();
 
     hs.innerHTML =
@@ -118,7 +114,6 @@ function _disPaint() {
         '<div class="dis-nav">' +
         '<button class="dis-nav-btn' + (_DIS.view === 'board'  ? ' active' : '') + '" data-click="disBoardView">Grid</button>' +
         '<button class="dis-nav-btn' + (_DIS.view === 'lb'     ? ' active' : '') + '" data-click="disLeaderboardView">Leaderboard</button>' +
-        (isAdmin ? '<button class="dis-nav-btn' + (_DIS.view === 'admin'  ? ' active' : '') + '" data-click="disAdminView">Admin</button>' : '') +
         '<button class="dis-nav-btn" data-click="showHomeScreen">\u2190 Hub</button>' +
         '</div>' +
         '</div>' +
@@ -132,9 +127,8 @@ function _disPaint() {
 }
 
 function _disRenderView() {
-    if (_DIS.view === 'lb')    return _disRenderLB();
+    if (_DIS.view === 'lb')     return _disRenderLB();
     if (_DIS.view === 'raffle') return _disRenderRaffle();
-    if (_DIS.view === 'admin') return _disRenderAdmin();
     return _disRenderBoard();
 }
 
@@ -333,48 +327,7 @@ function _disRenderRaffle() {
     body.innerHTML = html;
 }
 
-// ── Admin view ────────────────────────────────────────────────
-function _disRenderAdmin() {
-    var body = document.getElementById('dis-body');
-    if (!body) return;
-
-    var tabs = [
-        { key: 'sync',     label: 'Sync' },
-        { key: 'tiles',    label: 'Tiles' },
-        { key: 'points',   label: 'Points' },
-        { key: 'raffle',   label: 'Raffle' },
-        { key: 'gamepool', label: 'Game Pool' },
-        { key: 'audit',    label: 'Audit Log' }
-    ];
-
-    var tabHtml = '<div class="dis-admin-tabs">';
-    tabs.forEach(function (t) {
-        tabHtml += '<button class="dis-admin-tab' + (_DIS.adminTab === t.key ? ' active' : '') + '" data-tab="' + t.key + '" onclick="disAdminTab(this)">' + t.label + '</button>';
-    });
-    tabHtml += '</div><div id="dis-admin-body"></div>';
-
-    body.innerHTML = tabHtml;
-    _disRenderAdminTab();
-}
-
-function disAdminTab(el) {
-    _DIS.adminTab = el.dataset.tab;
-    document.querySelectorAll('.dis-admin-tab').forEach(function (b) { b.classList.remove('active'); });
-    el.classList.add('active');
-    _disRenderAdminTab();
-}
-
-function _disRenderAdminTab() {
-    var body = document.getElementById('dis-admin-body');
-    if (!body) return;
-    var tab = _DIS.adminTab;
-    if (tab === 'sync')     _disAdminSync(body);
-    else if (tab === 'tiles')    _disAdminTiles(body);
-    else if (tab === 'points')   _disAdminPoints(body);
-    else if (tab === 'raffle')   _disAdminRaffle(body);
-    else if (tab === 'gamepool') _disAdminGamePool(body);
-    else if (tab === 'audit')    _disAdminAudit(body);
-}
+// (Admin view moved to unified admin dashboard — see render.js renderUnifiedAdmin)
 
 // ── Admin: Sync ────────────────────────────────────────────────
 function _disAdminSync(body) {
@@ -839,7 +792,7 @@ function _disSaveGamePool(pool) {
             if (res.error) throw new Error(res.error);
             _DIS.gamepool = pool;
             toast('Game pool saved (' + pool.length + ' games)', 'success');
-            var body = document.getElementById('dis-admin-body');
+            var body = document.getElementById('admin-body');
             if (body) _disAdminGamePool(body);
         })
         .catch(function (e) { toast('Save failed: ' + e.message, 'error'); });
@@ -864,9 +817,9 @@ function _disAdminAction(payload, successMsg) {
         .then(function (res) {
             if (res.error) throw new Error(res.error);
             toast(successMsg, 'success');
-            _disLoad(false);
-            if (_DIS.view === 'admin') {
-                setTimeout(function () { _disRenderAdmin(); }, 300);
+            // Refresh admin tab content via unified admin
+            if (typeof _adminRefreshDisTab === 'function') {
+                setTimeout(_adminRefreshDisTab, 300);
             }
         })
         .catch(function (e) { toast('Action failed: ' + e.message, 'error'); });
@@ -881,9 +834,6 @@ function disLeaderboardView() {
     _DIS.view = 'lb'; _disPaint();
 }
 
-function disAdminView() {
-    _DIS.view = 'admin'; _disPaint();
-}
 
 function disRaffleView() {
     _DIS.view = 'raffle'; _disPaint();
