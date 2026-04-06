@@ -5,7 +5,7 @@ publish = "."
 command = "npm install"
 
 [build.environment]
-NODE_VERSION = "18"
+NODE_VERSION = "20"
 
 # ── Auth API redirects (must be before the SPA catch-all) ──────
 [[redirects]]

@@ -47,7 +47,8 @@ function _disLoad(showSpinner) {
         .then(function (data) {
             _DIS.loading = false;
             _DIS.state = data;
-            _disRenderView();
+            // Don't re-render while user is editing in the admin panel
+            if (_DIS.view !== 'admin') _disRenderView();
         })
         .catch(function (e) {
             _DIS.loading = false;
