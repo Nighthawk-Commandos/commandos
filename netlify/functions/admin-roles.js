@@ -5,7 +5,7 @@
 //  DELETE → { id }                            → delete
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit } = require('./_shared');
+const { blobsStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
 
 function makeId(name) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
@@ -60,6 +60,7 @@ exports.handler = async (event) => {
         roles.push(newRole);
         await adminStore.set('roles', JSON.stringify(roles));
         await addAdminAudit(adminStore, adminId, 'ROLE_CREATE', { id: newRole.id, name: newRole.name, color: newRole.color });
+        await sendAuditWebhook(adminId, 'ROLE_CREATE', { id: newRole.id, name: newRole.name, color: newRole.color });
         return json(200, { success: true, roles });
     }
 
@@ -77,6 +78,7 @@ exports.handler = async (event) => {
         });
         await adminStore.set('roles', JSON.stringify(roles));
         await addAdminAudit(adminStore, adminId, 'ROLE_UPDATE', { id, name: roles[idx].name, color: roles[idx].color });
+        await sendAuditWebhook(adminId, 'ROLE_UPDATE', { id, name: roles[idx].name, color: roles[idx].color });
         return json(200, { success: true, roles });
     }
 
@@ -88,6 +90,7 @@ exports.handler = async (event) => {
         roles = roles.filter(r => r.id !== id);
         await adminStore.set('roles', JSON.stringify(roles));
         await addAdminAudit(adminStore, adminId, 'ROLE_DELETE', { id, name: target.name });
+        await sendAuditWebhook(adminId, 'ROLE_DELETE', { id, name: target.name });
         return json(200, { success: true, roles });
     }
 

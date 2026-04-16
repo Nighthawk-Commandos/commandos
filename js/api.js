@@ -80,9 +80,57 @@ var API = (function () {
             else { _mem = {}; try { localStorage.clear(); } catch (_) {} }
         },
 
-        /** Main spreadsheet data — heavy, cache aggressively */
+        /**
+         * Check the server's deploy version against what's stored locally.
+         * If the DEPLOY_ID changed (i.e. a new version was pushed), wipe all
+         * localStorage caches so users get fresh data without a manual reload.
+         * Called once at boot, in parallel with AUTH.load().
+         */
+        checkVersion: function () {
+            return fetch('/api/version', { credentials: 'same-origin', cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data || !data.v) return; // no DEPLOY_ID in env (local dev) — skip
+                    try {
+                        var stored = localStorage.getItem('c:deployVer');
+                        if (stored !== null && stored !== data.v) {
+                            // New deploy detected — clear all stale cached data
+                            _mem = {};
+                            localStorage.clear();
+                        }
+                        localStorage.setItem('c:deployVer', data.v);
+                    } catch (_) {}
+                })
+                .catch(function () {}); // never block boot on a version check failure
+        },
+
+        /** Main spreadsheet data — served via server-side cache proxy for scale.
+         *  Falls back to direct Apps Script call if the proxy is unavailable. */
         getAllData: function () {
-            return cachedCall('c:allData', 'getAllData', null, CACHE_TTL);
+            // In-memory or localStorage cache hit → skip network entirely
+            if (_mem['c:allData'] && Date.now() < _mem['c:allData'].exp) {
+                return Promise.resolve(_mem['c:allData'].data);
+            }
+            var lsData = lsGet('c:allData');
+            if (lsData) {
+                _mem['c:allData'] = { data: lsData, exp: Date.now() + CACHE_TTL };
+                return Promise.resolve(lsData);
+            }
+            // Fetch from server-side proxy (handles CDN + Blobs caching for all users)
+            return fetch('/api/mainframe/data', { credentials: 'same-origin', cache: 'no-store' })
+                .then(function (r) {
+                    if (!r.ok) throw new Error('proxy HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function (data) {
+                    _mem['c:allData'] = { data: data, exp: Date.now() + CACHE_TTL };
+                    lsSet('c:allData', data, CACHE_TTL);
+                    return data;
+                })
+                .catch(function () {
+                    // Proxy unavailable — fall back to direct Apps Script call
+                    return cachedCall('c:allData', 'getAllData', null, CACHE_TTL);
+                });
         },
 
         /** Member list — used for autocomplete */

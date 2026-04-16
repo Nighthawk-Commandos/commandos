@@ -1,29 +1,64 @@
 // ═══════════════════════════════════════════════════════════════
 //  dis.js — Deployment Incentive System
-//  Lock-out deployment grid with persistent data, admin controls,
-//  audit logs, points, weighted raffle, real-time polling.
+//  Sidebar layout matching Division Objectives + Mainframe.
+//  Views: board | lb | raffle
+//  Admin views delegated to render.js _adminRenderDisTab
 // ═══════════════════════════════════════════════════════════════
 
 'use strict';
 
 // ── Module state ──────────────────────────────────────────────
 var _DIS = {
-    state:     null,       // { tiles, globalMultiplier, weekNumber, leaderboard, stats, lastSyncAt }
-    stateHash: null,       // JSON fingerprint of last rendered state
-    gamepool:  null,       // [{ gameId, name, eventTypes }]
-    view:      'board',    // 'board' | 'lb' | 'raffle'
+    state:     null,
+    stateHash: null,
+    gamepool:  null,
+    view:      'board',
     poll:      null,
     loading:   false
 };
 
 // ── Entry point ───────────────────────────────────────────────
 function renderDISSection() {
-    _DIS.view = 'board';
-    _DIS.stateHash = null; // force full render on first load
-    _disPaint();
-    _disLoad(true);
-    _disStartPoll();
-    _disStartVisibilityWatch();
+    _DIS.view     = 'board';
+    _DIS.stateHash = null;
+
+    // Show global loading overlay while fetching initial state
+    var ls = document.getElementById('loading-status');
+    if (ls) ls.textContent = 'Loading deployment data\u2026';
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('home-screen').classList.add('hidden');
+
+    fetch('/api/dis/state')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            _DIS.state    = data;
+            _DIS.stateHash = JSON.stringify(data);
+            document.getElementById('loading').classList.add('hidden');
+            var hs = document.getElementById('home-screen');
+            if (hs) hs.classList.remove('hidden');
+            _disPaint();
+            _disStartPoll();
+            _disStartVisibilityWatch();
+        })
+        .catch(function (e) {
+            document.getElementById('loading').classList.add('hidden');
+            var hs = document.getElementById('home-screen');
+            if (hs) {
+                hs.classList.remove('hidden');
+                hs.className = 'obj-mode';
+                hs.innerHTML = '<div class="bg-grid"></div>' +
+                    '<aside class="obj-sidebar">' +
+                    '  <div class="obj-sidebar-logo">' +
+                    '    <div class="obj-sidebar-label">TNI Commandos</div>' +
+                    '    <div class="obj-sidebar-title">Deployment<br>Incentive</div>' +
+                    '  </div>' +
+                    '  <div class="obj-sidebar-back"><button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Hub</button></div>' +
+                    '</aside>' +
+                    '<main class="obj-main">' +
+                    '  <div class="obj-error">Failed to load: ' + esc(e.message) + '</div>' +
+                    '</main>';
+            }
+        });
 }
 
 // Called when leaving the DIS section
@@ -42,9 +77,7 @@ function _disStopPoll() {
     if (_DIS.poll) { clearInterval(_DIS.poll); _DIS.poll = null; }
 }
 
-// ── Visibility watch — pause poll when tab is hidden ──────────
-// Saves requests when users have the tab open but aren't looking at it.
-// On return, refreshes immediately then restarts the 60s interval.
+// ── Visibility watch ──────────────────────────────────────────
 var _disVisHandler = null;
 
 function _disStartVisibilityWatch() {
@@ -53,7 +86,7 @@ function _disStartVisibilityWatch() {
         if (document.hidden) {
             _disStopPoll();
         } else {
-            _disLoad(false);   // immediate refresh on return
+            _disLoad(false);
             _disStartPoll();
         }
     };
@@ -78,12 +111,11 @@ function _disLoad(showSpinner) {
             var newHash = JSON.stringify(data);
             var unchanged = newHash === _DIS.stateHash;
             _DIS.state = data;
-            if (unchanged) return;             // nothing changed, skip re-render
+            if (unchanged) return;
             _DIS.stateHash = newHash;
-            // Partial update for board view; full re-render for leaderboard/raffle
             if (_DIS.view === 'board' && document.getElementById('dis-body')) {
                 _disSmartUpdateBoard();
-            } else {
+            } else if (document.getElementById('dis-body')) {
                 _disRenderView();
             }
         })
@@ -96,34 +128,57 @@ function _disLoad(showSpinner) {
         });
 }
 
-// ── Paint shell (header + nav tabs) ──────────────────────────
+// ── Paint shell (sidebar + main) ──────────────────────────────
 function _disPaint() {
     var hs = document.getElementById('home-screen');
     if (!hs) return;
     var wk = (_DIS.state && _DIS.state.weekNumber) ? _DIS.state.weekNumber : _disWeek();
 
+    var isAdmin = window.AUTH && typeof window.AUTH.canAdminAny === 'function' && window.AUTH.canAdminAny();
+
+    var navItems = [
+        { key: 'board',  label: 'Grid' },
+        { key: 'lb',     label: 'Leaderboard' },
+        { key: 'raffle', label: 'Raffle' }
+    ];
+
+    var navHtml = navItems.map(function (n) {
+        var active = _DIS.view === n.key;
+        return '<div class="obj-nav-item' + (active ? ' active' : '') + '" data-disview="' + n.key + '" data-click="disNavGo">' +
+            '<span class="obj-nav-dot"></span>' + esc(n.label) + '</div>';
+    }).join('');
+
+    hs.className = 'obj-mode';
     hs.innerHTML =
         '<div class="bg-grid"></div>' +
-        '<div class="home-inner" style="padding-top:40px">' +
-        '<div class="dis-wrap">' +
-        '<div class="dis-header">' +
-        '<div class="dis-header-left">' +
-        '<div class="dis-eyebrow">WEEK ' + wk + ' \u2014 LOCK-OUT DEPLOYMENT GRID</div>' +
-        '<div class="dis-title">Deployment Incentive System</div>' +
-        '</div>' +
-        '<div class="dis-nav">' +
-        '<button class="dis-nav-btn' + (_DIS.view === 'board'  ? ' active' : '') + '" data-click="disBoardView">Grid</button>' +
-        '<button class="dis-nav-btn' + (_DIS.view === 'lb'     ? ' active' : '') + '" data-click="disLeaderboardView">Leaderboard</button>' +
-        '<button class="dis-nav-btn" data-click="showHomeScreen">\u2190 Hub</button>' +
-        '</div>' +
-        '</div>' +
-        '<div id="dis-body">' +
+        '<aside class="obj-sidebar" id="dis-sidebar">' +
+        '  <div class="obj-sidebar-logo">' +
+        '    <div class="obj-sidebar-label">TNI Commandos \u2014 Week ' + wk + '</div>' +
+        '    <div class="obj-sidebar-title">Deployment<br>Incentive</div>' +
+        '  </div>' +
+        '  <div class="obj-sidebar-back">' +
+        '    <button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Hub</button>' +
+        '  </div>' +
+        '  <nav class="obj-nav" id="dis-nav">' +
+        '    <div class="obj-nav-group">Views</div>' +
+        navHtml +
+        '  </nav>' +
+        '</aside>' +
+        '<main class="obj-main" id="dis-main">' +
+        '  <div id="dis-body">' +
         (!_DIS.state ? '<div class="obj-loading">Loading\u2026</div>' : '') +
-        '</div>' +
-        '</div>' +
-        '</div>';
+        '  </div>' +
+        '</main>';
 
     if (_DIS.state) _disRenderView();
+}
+
+function _disUpdateNavActive() {
+    document.querySelectorAll('#dis-nav .obj-nav-item').forEach(function (el) {
+        el.classList.toggle('active', el.dataset.disview === _DIS.view);
+        var dot = el.querySelector('.obj-nav-dot');
+        if (dot) dot.style.background = el.classList.contains('active') ? '' : '';
+    });
 }
 
 function _disRenderView() {
@@ -133,13 +188,10 @@ function _disRenderView() {
 }
 
 // ── Smart partial board update (poll only) ────────────────────
-// Updates stat numbers, sync note, and only tiles that changed state.
-// Never rebuilds the entire grid so scroll position and layout are preserved.
 function _disSmartUpdateBoard() {
     var body = document.getElementById('dis-body');
     if (!body) { _disRenderBoard(); return; }
 
-    // If the grid doesn't exist yet, do a full render
     var grid = body.querySelector('.dis-grid');
     if (!grid) { _disRenderBoard(); return; }
 
@@ -150,7 +202,6 @@ function _disSmartUpdateBoard() {
     var avail   = tiles.filter(function (t) { return !t.completed && !t.lockedByAdmin; }).length;
     var locked  = 25 - claimed - avail;
 
-    // Update stat numbers in-place
     var statNums = body.querySelectorAll('.bingo-stat-num');
     if (statNums.length >= 4) {
         statNums[0].textContent = claimed;
@@ -159,7 +210,6 @@ function _disSmartUpdateBoard() {
         statNums[3].textContent = gm + (gm !== 1 ? 'x' : '');
     }
 
-    // Update or insert sync note
     var syncNote = body.querySelector('.dis-sync-note');
     if (st.lastSyncAt) {
         var noteText = 'Last synced: ' + new Date(st.lastSyncAt).toLocaleString();
@@ -173,7 +223,6 @@ function _disSmartUpdateBoard() {
         }
     }
 
-    // Update only tiles whose state changed
     var tileDivs = grid.querySelectorAll('.dis-tile');
     tiles.forEach(function (tile, i) {
         var el = tileDivs[i];
@@ -182,7 +231,6 @@ function _disSmartUpdateBoard() {
         var pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
         var wantCls = 'dis-tile' + (tile.completed ? ' dis-tile-claimed' : tile.lockedByAdmin ? ' dis-tile-locked' : '');
 
-        // Only rebuild the tile if its CSS class changed (i.e. status changed)
         if (el.className !== wantCls) {
             el.className = wantCls;
             var inner =
@@ -199,6 +247,10 @@ function _disSmartUpdateBoard() {
             el.innerHTML = inner;
         }
     });
+
+    // Update week number in sidebar label
+    var label = document.querySelector('#dis-sidebar .obj-sidebar-label');
+    if (label && st.weekNumber) label.textContent = 'TNI Commandos \u2014 Week ' + st.weekNumber;
 }
 
 // ── Board view ────────────────────────────────────────────────
@@ -213,6 +265,10 @@ function _disRenderBoard() {
     var avail   = tiles.filter(function (t) { return !t.completed && !t.lockedByAdmin; }).length;
 
     var html =
+        '<div class="page-header">' +
+        '<div class="eyebrow">LOCK-OUT DEPLOYMENT GRID</div>' +
+        '<h1>Deployment Board</h1>' +
+        '</div>' +
         '<div class="bingo-stats">' +
         '<div class="bingo-stat"><div class="bingo-stat-num">' + claimed + '</div><div class="bingo-stat-lbl">Claimed</div></div>' +
         '<div class="bingo-stat"><div class="bingo-stat-num">' + avail + '</div><div class="bingo-stat-lbl">Available</div></div>' +
@@ -236,7 +292,7 @@ function _disRenderBoard() {
             var pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
 
             html += '<div class="' + cls + '"' +
-                (tile.gameId ? ' onclick="window.open(\'https://www.roblox.com/games/' + tile.gameId + '\',\'_blank\')"' : '') + '>' +
+                (tile.gameId && !tile.completed && !tile.lockedByAdmin ? ' onclick="window.open(\'https://www.roblox.com/games/' + tile.gameId + '\',\'_blank\')"' : '') + '>' +
                 '<div class="dis-tile-type">' + esc(tile.eventType) + '</div>' +
                 '<div class="dis-tile-game">' + esc(tile.gameName || (tile.gameId ? 'Game ' + tile.gameId : '?')) + '</div>';
 
@@ -245,10 +301,8 @@ function _disRenderBoard() {
                     '<div class="dis-status-badge dis-badge-claimed">CLAIMED</div>';
             } else if (tile.lockedByAdmin) {
                 html += '<div class="dis-status-badge dis-badge-locked">LOCKED</div>';
-            } else {
-                if (tile.multiplier > 1 || gm > 1) {
-                    html += '<div class="dis-tile-pts">' + pts + 'pt' + (pts !== 1 ? 's' : '') + '</div>';
-                }
+            } else if (tile.multiplier > 1 || gm > 1) {
+                html += '<div class="dis-tile-pts">' + pts + 'pt' + (pts !== 1 ? 's' : '') + '</div>';
             }
             html += '</div>';
         });
@@ -264,12 +318,15 @@ function _disRenderLB() {
     if (!body) return;
 
     var entries = (_DIS.state && _DIS.state.leaderboard) ? _DIS.state.leaderboard : [];
+
+    var html = '<div class="page-header"><div class="eyebrow">MONTHLY STANDINGS</div><h1>Leaderboard</h1></div>';
+
     if (entries.length === 0) {
-        body.innerHTML = '<div class="empty">No entries yet.</div>';
+        body.innerHTML = html + '<div class="empty">No entries yet.</div>';
         return;
     }
 
-    var html = '<div class="tbl-wrap"><table>' +
+    html += '<div class="tbl-wrap"><table>' +
         '<thead><tr>' +
         '<th style="width:40px">#</th>' +
         '<th>Officer</th>' +
@@ -301,10 +358,10 @@ function _disRenderRaffle() {
     var totalEntries = entries.reduce(function (s, e) { return s + (e.raffleEntries || 0); }, 0);
 
     var html =
+        '<div class="page-header"><div class="eyebrow">WEIGHTED RAFFLE</div><h1>Raffle</h1></div>' +
         '<div class="info-block" style="margin-bottom:16px">' +
-        '<h3>Weekly Raffle</h3>' +
-        '<p class="admin-desc">Weighted raffle — each raffle entry counts as one ticket. ' +
-        'Total entries this week: <strong style="color:var(--accent2)">' + totalEntries + '</strong>.</p>' +
+        '<p class="admin-desc">Each raffle entry counts as one ticket. ' +
+        'Total entries this month: <strong style="color:var(--accent2)">' + totalEntries + '</strong>.</p>' +
         '</div>' +
         '<div class="tbl-wrap" style="margin-bottom:16px"><table>' +
         '<thead><tr><th>Officer</th><th style="text-align:right">Entries</th><th style="text-align:right">Chance</th></tr></thead><tbody>';
@@ -327,17 +384,13 @@ function _disRenderRaffle() {
     body.innerHTML = html;
 }
 
-// (Admin view moved to unified admin dashboard — see render.js renderUnifiedAdmin)
-
-// ── Admin: Sync ────────────────────────────────────────────────
+// ── Admin: Sync tab ────────────────────────────────────────────
 function _disAdminSync(body) {
     var st = _DIS.state || {};
     body.innerHTML =
         '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Sync from Google Sheets</h3>' +
-        '<p class="admin-desc">Fetches event log rows from the mainframe Apps Script and claims any matching unclaimed tiles. ' +
-        'The sync matches each row\'s (Game ID + Event Type) against available tiles. ' +
-        'First valid submission claims the tile globally.</p>' +
+        '<p class="admin-desc">Fetches event log rows from the mainframe Apps Script and claims any matching unclaimed tiles.</p>' +
         (st.lastSyncAt ? '<p class="admin-desc">Last sync: ' + new Date(st.lastSyncAt).toLocaleString() + '</p>' : '') +
         '</div>' +
         '<div class="dis-admin-actions">' +
@@ -355,11 +408,24 @@ function _disAdminSync(body) {
         '<hr style="border-color:var(--border);margin:24px 0">' +
         '<div class="info-block">' +
         '<h3>Week Control</h3>' +
-        '<p class="admin-desc">Override the current week number displayed. Resets require using the Tiles tab.</p>' +
+        '<p class="admin-desc">Advance to next week: awards +1 raffle ticket to top 5 officers by tiles, then resets the board for a new week. Points and raffle entries carry forward through the month.</p>' +
+        '<div class="dis-admin-actions" style="margin-top:12px">' +
+        '<button class="btn-dis-primary" style="background:rgba(124,74,184,.2)" onclick="disAdvanceWeek()">Advance to Next Week</button>' +
+        '</div>' +
+        '<div id="dis-advance-week-result" style="margin-top:12px"></div>' +
+        '</div>' +
+        '<hr style="border-color:var(--border);margin:24px 0">' +
+        '<div class="info-block">' +
+        '<h3>Month Control</h3>' +
+        '<p class="admin-desc">Advance to next month: archives all-time stats, then resets all points, tiles, and raffle entries.</p>' +
+        '<div class="dis-admin-actions" style="margin-top:12px">' +
+        '<button class="btn-ghost" style="font-size:11px;color:var(--red);border-color:rgba(224,82,82,.3)" onclick="disAdvanceMonth()">Advance to Next Month</button>' +
+        '</div>' +
+        '<div id="dis-advance-month-result" style="margin-top:12px"></div>' +
         '</div>';
 }
 
-// ── Admin: Tiles ───────────────────────────────────────────────
+// ── Admin: Tiles tab ───────────────────────────────────────────
 function _disAdminTiles(body) {
     var tiles = (_DIS.state && _DIS.state.tiles) ? _DIS.state.tiles : [];
     var gm = (_DIS.state && _DIS.state.globalMultiplier) || 1;
@@ -421,15 +487,14 @@ function _disAdminTiles(body) {
     body.innerHTML = html;
 }
 
-// ── Admin: Points ──────────────────────────────────────────────
+// ── Admin: Points tab ──────────────────────────────────────────
 function _disAdminPoints(body) {
     var lb = (_DIS.state && _DIS.state.leaderboard) ? _DIS.state.leaderboard : [];
 
     var html =
         '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Points Management</h3>' +
-        '<p class="admin-desc">Manually adjust points or raffle entries for any officer. ' +
-        'Use positive values to add, negative to subtract.</p></div>';
+        '<p class="admin-desc">Manually adjust points or raffle entries. Use positive values to add, negative to subtract.</p></div>';
 
     html += '<div class="dis-inline-form" style="margin-bottom:24px">' +
         '<input id="dis-pts-user" class="admin-input" placeholder="Roblox username" style="flex:1">' +
@@ -452,7 +517,7 @@ function _disAdminPoints(body) {
     body.innerHTML = html;
 }
 
-// ── Admin: Raffle ──────────────────────────────────────────────
+// ── Admin: Raffle tab ──────────────────────────────────────────
 function _disAdminRaffle(body) {
     var lb = (_DIS.state && _DIS.state.leaderboard) ? _DIS.state.leaderboard : [];
     var total = lb.reduce(function (s, e) { return s + (e.raffleEntries || 0); }, 0);
@@ -489,7 +554,7 @@ function _disAdminRaffle(body) {
     body.innerHTML = html;
 }
 
-// ── Admin: Game Pool ───────────────────────────────────────────
+// ── Admin: Game Pool tab ───────────────────────────────────────
 function _disAdminGamePool(body) {
     body.innerHTML = '<div class="obj-loading">Loading game pool\u2026</div>';
     fetch('/api/dis/gamepool')
@@ -509,8 +574,7 @@ function _disRenderGamePool(body) {
     var html =
         '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Game Pool</h3>' +
-        '<p class="admin-desc">Define the games used when generating the bingo board. ' +
-        'Each game needs a Roblox Game ID (from the URL) and a list of event types.</p></div>';
+        '<p class="admin-desc">Define the games used when generating the board. Each game needs a Roblox Game ID and event types.</p></div>';
 
     html += '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Add Game</h3>' +
@@ -543,7 +607,7 @@ function _disRenderGamePool(body) {
     body.innerHTML = html;
 }
 
-// ── Admin: Audit Log ───────────────────────────────────────────
+// ── Admin: Audit Log tab ───────────────────────────────────────
 function _disAdminAudit(body) {
     body.innerHTML = '<div class="obj-loading">Loading audit log\u2026</div>';
     Promise.all([
@@ -567,7 +631,6 @@ function _disAdminAudit(body) {
             return;
         }
 
-        // Badge color by source
         var srcColors = { DIS: 'b-bronze', ADM: 'b-silver' };
 
         var html = '<div class="tbl-wrap"><table>' +
@@ -588,11 +651,65 @@ function _disAdminAudit(body) {
     });
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  Action functions (called from onclick / data-click)
-// ═══════════════════════════════════════════════════════════════
+// ── Action: Advance week ───────────────────────────────────────
+function disAdvanceWeek() {
+    if (!confirm('Advance to next week?\n\nThis will:\n• Award +1 raffle ticket to the top 5 officers by tiles\n• Reset all tile claims for the new week\n• Keep current points and raffle entries\n\nCannot be undone.')) return;
 
-// ── Trigger sync from Apps Script ─────────────────────────────
+    var btn    = document.getElementById('dis-advance-week-btn');
+    var result = document.getElementById('dis-advance-week-result');
+    if (btn) btn.disabled = true;
+
+    fetch('/api/dis/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'advance-week' })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (btn) btn.disabled = false;
+            if (res.error) throw new Error(res.error);
+
+            var top5Names = (res.top5 || []).map(function (e) { return e.username + ' (' + e.tiles + ' tiles)'; }).join(', ');
+            var msg = 'Week advanced to Week ' + res.weekNumber + '.';
+            if (top5Names) msg += '\n\nTop 5 awarded +1 raffle ticket: ' + top5Names;
+
+            if (result) result.innerHTML = '<div class="field-info" style="margin-top:8px"><strong>Done!</strong><br>' + esc(msg).replace(/\n/g, '<br>') + '</div>';
+            toast('Week advanced to Week ' + res.weekNumber, 'success');
+            _disLoad(false);
+        })
+        .catch(function (e) {
+            if (btn) btn.disabled = false;
+            if (result) result.innerHTML = '<div class="field-warn">Failed: ' + esc(e.message) + '</div>';
+            toast('Advance week failed: ' + e.message, 'error');
+        });
+}
+
+// ── Action: Advance month ──────────────────────────────────────
+function disAdvanceMonth() {
+    if (!confirm('Advance to next month?\n\nThis will:\n• Archive this month\'s stats to the all-time leaderboard\n• Reset ALL points, tiles, and raffle entries\n• Reset week counter to 1\n\nThis CANNOT be undone.')) return;
+
+    var result = document.getElementById('dis-advance-month-result');
+
+    fetch('/api/dis/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'advance-month' })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.error) throw new Error(res.error);
+            if (result) result.innerHTML = '<div class="field-info" style="margin-top:8px"><strong>Month advanced!</strong><br>' +
+                esc(res.usersArchived + ' officers archived. All stats reset.') + '</div>';
+            toast('Month reset complete', 'success');
+            _disLoad(false);
+        })
+        .catch(function (e) {
+            if (result) result.innerHTML = '<div class="field-warn">Failed: ' + esc(e.message) + '</div>';
+            toast('Advance month failed: ' + e.message, 'error');
+        });
+}
+
+// ── Action: Trigger sync ───────────────────────────────────────
 function disTriggerSync() {
     var btn = document.getElementById('dis-sync-btn');
     var result = document.getElementById('dis-sync-result');
@@ -601,26 +718,17 @@ function disTriggerSync() {
     var url = window.SCRIPT_URL;
     if (!url) { toast('SCRIPT_URL not configured', 'error'); return; }
 
-    // Step 1: Fetch events from Apps Script
-    var _fetchedTotal = 0;
     fetch(url + '?action=api&fn=getDeploymentEvents', { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (json) {
             var events = (json && json.events) ? json.events : [];
-            _fetchedTotal = events.length;
-
             if (events.length === 0) {
-                // Show what the Apps Script actually returned to aid debugging
                 var raw = JSON.stringify(json).slice(0, 200);
-                if (result) result.innerHTML =
-                    '<div class="field-warn">Apps Script returned 0 events. Response: <code style="font-size:10px;word-break:break-all">' + esc(raw) + '</code></div>';
+                if (result) result.innerHTML = '<div class="field-warn">Apps Script returned 0 events. Response: <code style="font-size:10px;word-break:break-all">' + esc(raw) + '</code></div>';
                 if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
                 return null;
             }
-
             if (btn) btn.textContent = 'Processing ' + events.length + ' rows\u2026';
-
-            // Step 2: Send to server for processing
             return fetch('/api/dis/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -628,27 +736,19 @@ function disTriggerSync() {
             }).then(function (r) { return r.json(); });
         })
         .then(function (res) {
-            if (!res) return; // handled above (0 events case)
+            if (!res) return;
             if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
             if (res.error) throw new Error(res.error);
-
-            var claimed  = res.claimed  || 0;
-            var skipped  = res.skipped  || 0;
-            var notFound = res.notFound || 0;
-            var total    = res.total    || 0;
-
-            var lines = [];
-            lines.push(claimed + ' new tile(s) claimed');
-            lines.push(skipped + ' already taken');
-            if (notFound > 0) lines.push(notFound + ' had no matching tile (check event type / game ID)');
-            lines.push(total + ' total rows from spreadsheet');
-
-            var cls = claimed > 0 ? 'field-info' : 'field-warn';
+            var lines = [
+                res.claimed  + ' new tile(s) claimed',
+                res.skipped  + ' already taken',
+                (res.notFound > 0 ? res.notFound + ' had no matching tile' : null),
+                res.total    + ' total rows from spreadsheet'
+            ].filter(Boolean);
+            var cls = res.claimed > 0 ? 'field-info' : 'field-warn';
             if (result) result.innerHTML = '<div class="' + cls + ' mt"><strong>Sync complete.</strong><br>' +
                 lines.map(function (l) { return esc(l); }).join('<br>') + '</div>';
-
-            var toastMsg = 'Sync: ' + claimed + ' claimed, ' + skipped + ' taken, ' + notFound + ' unmatched';
-            toast(toastMsg, claimed > 0 ? 'success' : 'error');
+            toast('Sync: ' + res.claimed + ' claimed, ' + res.skipped + ' taken', res.claimed > 0 ? 'success' : 'error');
             _disLoad(false);
         })
         .catch(function (e) {
@@ -659,13 +759,8 @@ function disTriggerSync() {
 }
 
 // ── Unlock / lock tile ─────────────────────────────────────────
-function disUnlockTile(pos) {
-    _disAdminAction({ action: 'unlock-tile', position: pos }, 'Tile unlocked');
-}
-
-function disLockTile(pos) {
-    _disAdminAction({ action: 'lock-tile', position: pos }, 'Tile locked');
-}
+function disUnlockTile(pos) { _disAdminAction({ action: 'unlock-tile', position: pos }, 'Tile unlocked'); }
+function disLockTile(pos)   { _disAdminAction({ action: 'lock-tile',   position: pos }, 'Tile locked');   }
 
 function disForceClaim(pos) {
     var user = prompt('Roblox username to assign tile ' + (pos + 1) + ' to:');
@@ -680,7 +775,15 @@ function disSetTilePoints(pos) {
     _disAdminAction({ action: 'set-tile-points', position: pos, points: val }, 'Tile ' + (pos + 1) + ' set to ' + val + ' pt' + (val !== 1 ? 's' : ''));
 }
 
-// ── Points / raffle ────────────────────────────────────────────
+function disSetTileEventType(pos) {
+    var input = document.getElementById('dis-tet-' + pos);
+    if (!input) return;
+    var eventType = input.value.trim();
+    if (!eventType) { toast('Enter an event type', 'error'); return; }
+    _disAdminAction({ action: 'set-tile-eventtype', position: pos, eventType: eventType }, 'Event type updated');
+}
+
+// ── Points / raffle adjustments ────────────────────────────────
 function disAdjustPoints() {
     var user = document.getElementById('dis-pts-user');
     var amt  = document.getElementById('dis-pts-amt');
@@ -697,21 +800,18 @@ function disAdjustRaffle() {
     user.value = ''; amt.value = '';
 }
 
-// ── Global multiplier ──────────────────────────────────────────
 function disSetGlobalMultiplier() {
     var inp = document.getElementById('dis-mult-input');
     var val = inp ? parseFloat(inp.value) : NaN;
-    if (isNaN(val) || val < 0.5) { toast('Enter a valid multiplier (≥ 0.5)', 'error'); return; }
+    if (isNaN(val) || val < 0.5) { toast('Enter a valid multiplier (\u2265 0.5)', 'error'); return; }
     _disAdminAction({ action: 'set-multiplier', value: val }, 'Global multiplier set to ' + val + 'x');
 }
 
-// ── Reset week ─────────────────────────────────────────────────
 function disResetWeek() {
     if (!confirm('This will clear ALL tile claims and user progress for the current week. Cannot be undone. Continue?')) return;
     _disAdminAction({ action: 'reset-week' }, 'Week progress reset');
 }
 
-// ── Regenerate board ───────────────────────────────────────────
 function disRegenerateBoard() {
     if (!confirm('Generate a new random board from the game pool? Current tiles will be replaced.')) return;
     _disAdminAction({ action: 'regenerate-board' }, 'Board regenerated');
@@ -735,7 +835,6 @@ function disRunRaffle() {
         return;
     }
 
-    // Animated draw
     if (resultEl) resultEl.innerHTML = '<div style="font-family:\'Syne\',sans-serif;font-size:13px;color:var(--muted)">Drawing\u2026</div>';
 
     var ticks = 0, maxTicks = 25;
@@ -750,7 +849,7 @@ function disRunRaffle() {
             var winner = pool[Math.floor(Math.random() * pool.length)];
             if (resultEl) {
                 resultEl.innerHTML =
-                    '<div style="background:rgba(200,164,74,.1);border:1px solid rgba(200,164,74,.3);padding:20px;text-align:center">' +
+                    '<div style="background:rgba(200,164,74,.1);border:1px solid rgba(200,164,74,.3);padding:20px;text-align:center;border-radius:8px">' +
                     '<div style="font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:8px">WINNER</div>' +
                     '<div style="font-family:\'Syne\',sans-serif;font-size:24px;font-weight:800;color:var(--accent2)">' + esc(winner) + '</div>' +
                     '</div>';
@@ -762,12 +861,11 @@ function disRunRaffle() {
 
 // ── Game pool actions ──────────────────────────────────────────
 function disAddGame() {
-    var id   = document.getElementById('dis-gp-id');
-    var name = document.getElementById('dis-gp-name');
-    var types= document.getElementById('dis-gp-types');
+    var id    = document.getElementById('dis-gp-id');
+    var name  = document.getElementById('dis-gp-name');
+    var types = document.getElementById('dis-gp-types');
     if (!id || !id.value.trim()) { toast('Enter a Game ID', 'error'); return; }
     var eventTypes = (types && types.value) ? types.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : ['Event'];
-
     var pool = (_DIS.gamepool || []).slice();
     pool.push({ gameId: id.value.trim(), name: (name && name.value.trim()) || '', eventTypes: eventTypes });
     _disSaveGamePool(pool);
@@ -811,14 +909,6 @@ function _disSaveGamePool(pool) {
         .catch(function (e) { toast('Save failed: ' + e.message, 'error'); });
 }
 
-function disSetTileEventType(pos) {
-    var input = document.getElementById('dis-tet-' + pos);
-    if (!input) return;
-    var eventType = input.value.trim();
-    if (!eventType) { toast('Enter an event type', 'error'); return; }
-    _disAdminAction({ action: 'set-tile-eventtype', position: pos, eventType: eventType }, 'Event type updated');
-}
-
 // ── Generic admin action helper ────────────────────────────────
 function _disAdminAction(payload, successMsg) {
     fetch('/api/dis/admin', {
@@ -830,7 +920,6 @@ function _disAdminAction(payload, successMsg) {
         .then(function (res) {
             if (res.error) throw new Error(res.error);
             toast(successMsg, 'success');
-            // Refresh admin tab content via unified admin
             if (typeof _adminRefreshDisTab === 'function') {
                 setTimeout(_adminRefreshDisTab, 300);
             }
@@ -838,18 +927,15 @@ function _disAdminAction(payload, successMsg) {
         .catch(function (e) { toast('Action failed: ' + e.message, 'error'); });
 }
 
-// ── Nav handlers ───────────────────────────────────────────────
-function disBoardView() {
-    _DIS.view = 'board'; _disPaint();
-}
-
-function disLeaderboardView() {
-    _DIS.view = 'lb'; _disPaint();
-}
-
-
-function disRaffleView() {
-    _DIS.view = 'raffle'; _disPaint();
+// ── Nav handler ────────────────────────────────────────────────
+function disNavGo(el) {
+    var view = el && el.dataset ? el.dataset.disview : el;
+    if (!view) return;
+    _DIS.view = view;
+    _disUpdateNavActive();
+    var main = document.getElementById('dis-main');
+    if (main) main.scrollTop = 0;
+    _disRenderView();
 }
 
 // ── Helpers ───────────────────────────────────────────────────

@@ -78,7 +78,8 @@ window.AUTH = {
             points:    'disPoints',
             raffle:    'disRaffle',
             gamepool:  'disGamePool',
-            audit:     'disAudit'
+            audit:     'disAudit',
+            errors:    'disAudit'
         };
         if (tab === 'roles')     return !!(p.roleAssign || p.roleEdit);
         if (tab === 'mainframe') return !!(p.mfOfficers || p.mfRemote);

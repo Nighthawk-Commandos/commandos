@@ -1,8 +1,9 @@
-/.idea
 /node_modules
 /Officer-Bingo
 .env
-.claude
 # Local Netlify folder
-.netlify
+/.netlify
 deno.lock
+appscript_code.js
+/.vscode
+/.idea

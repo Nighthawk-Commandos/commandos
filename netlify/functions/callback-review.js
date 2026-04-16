@@ -81,7 +81,7 @@ const TYPE_CONFIG = {
 };
 
 async function callAppsScript(params) {
-    const scriptUrl = window.SCRIPT_URL;
+    const scriptUrl = process.env.SCRIPT_URL;
     if (!scriptUrl) throw new Error('SCRIPT_URL not configured');
     const qs = new URLSearchParams({
         action:  'api',
@@ -95,7 +95,7 @@ async function callAppsScript(params) {
 
 async function fetchMemberList() {
     try {
-        const scriptUrl = window.SCRIPT_URL;
+        const scriptUrl = process.env.SCRIPT_URL;
         if (!scriptUrl) return [];
         const qs  = new URLSearchParams({ action: 'api', fn: 'getGroupMembers' });
         const res = await fetch(scriptUrl + '?' + qs.toString());
@@ -184,7 +184,7 @@ window.addEventListener('load',function(){
   var l=document.getElementById('loader');l.classList.add('gone');
   setTimeout(function(){l.style.display='none';},350);
 });
-var M=${membersJson},nr='${cfg.notesRequired}',ai=-1;
+var M=${membersJson},nr=${JSON.stringify(cfg.notesRequired)},ai=-1;
 function bd(q){
   var d=document.getElementById('rd');
   var mx=q?M.filter(function(m){return m.toLowerCase().indexOf(q.toLowerCase())>-1;}).slice(0,12):[];
@@ -213,7 +213,7 @@ function validate(){
   if(!r){document.getElementById('er').style.display='block';ok=false;}else document.getElementById('er').style.display='none';
   var ne=document.getElementById('ni'),en=document.getElementById('en');
   if(ne&&en){
-    var n=ne.value.trim(),dec='${action}';
+    var n=ne.value.trim(),dec=${JSON.stringify(action)};
     var need=(nr==='deny'&&dec==='deny')||(nr==='approve'&&dec==='approve');
     if(need&&!n){en.style.display='block';ok=false;}else en.style.display='none';
   }

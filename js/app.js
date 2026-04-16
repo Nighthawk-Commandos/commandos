@@ -68,7 +68,6 @@ function renderHomeScreen() {
         var accessible = s.accessFn();
         return '<div class="home-card' + (accessible ? '' : ' home-card-locked') + '"' +
             (accessible ? ' data-click="enterSection" data-section="' + s.id + '"' : '') + '>' +
-            '<div class="home-card-tag" style="color:' + s.tagColor + ';border-color:' + s.tagColor + '44">' + esc(s.tag) + '</div>' +
             '<div class="home-card-body">' +
             '<div class="home-card-title">' + esc(s.title) + '</div>' +
             '<div class="home-card-desc">' + esc(s.desc) + '</div>' +
@@ -79,12 +78,16 @@ function renderHomeScreen() {
     }).join('');
 
     var roleLine = u.divisionRoleName
-        ? esc(u.divisionRoleName) + ' &mdash; Rank ' + u.divisionRank
-        : 'Rank ' + u.divisionRank;
+        ? 'Rank: ' + esc(u.divisionRoleName)
+        : 'Rank: ' + u.divisionRank;
 
     var ghostLine = u.ghostRank > 0
-        ? '<span class="home-profile-ghost">Ghost Rank ' + u.ghostRank + (u.ghostRoleName ? ' &mdash; ' + esc(u.ghostRoleName) : '') + '</span>'
+        ? 'Ghost Rank: ' + (u.ghostRoleName ? esc(u.ghostRoleName) : u.ghostRank)
         : '';
+
+    var discordAvatar = u.discordAvatar
+        ? 'https://cdn.discordapp.com/avatars/' + u.discordId + '/' + u.discordAvatar + '.png'
+        : 'https://cdn.discordapp.com/embed/avatars/0.png';
 
     var hs = document.getElementById('home-screen');
     if (!hs) return;
@@ -97,11 +100,17 @@ function renderHomeScreen() {
         '<div class="home-divider"></div>' +
         '</div>' +
         '<div class="home-profile">' +
+        '<div class="home-profile-avatar">' +
+        '<img src="' + discordAvatar + '" alt="Discord Avatar">' +
+        '</div>' +
         '<div class="home-profile-left">' +
         '<div class="home-profile-name">' + esc(u.robloxUsername) + '</div>' +
-        '<div class="home-profile-rank">' + roleLine + ghostLine + '</div>' +
+        '<div class="home-profile-rank">' +
+        '<span class="rank-line">' + roleLine + '</span>'+
+        (ghostLine ? '<span class="rank-line home-profile-ghost">' + ghostLine + '</span>' : '') +
         '</div>' +
-        '<button class="home-logout-btn" data-click="doLogout">Disconnect</button>' +
+        '</div>' +
+        '<button class="home-logout-btn" data-click="doLogout">Logout</button>' +
         '</div>' +
         '<div class="home-grid">' + cards + '</div>' +
         '</div>';
@@ -152,8 +161,30 @@ function renderSectionPlaceholder(title, msg) {
         '</div>';
 }
 
-function showHomeScreen() { renderHomeScreen(); }
-function doLogout()       { window.AUTH.logout(); }
+function showHomeScreen() {
+    // Tear down mainframe view if active
+    var appEl = document.getElementById('app');
+    var hbg   = document.getElementById('hbg');
+    if (appEl && !appEl.classList.contains('hidden')) {
+        appEl.classList.add('hidden');
+    }
+    if (hbg) hbg.style.display = 'none';
+
+    // Stop DIS polling if leaving DIS
+    if (typeof disLeave === 'function') disLeave();
+
+    // Reset home-screen element — clear any section-specific classes/styles
+    var hs = document.getElementById('home-screen');
+    if (hs) {
+        hs.className = '';        // clears obj-mode, hidden, etc.
+        hs.removeAttribute('style');
+    }
+
+    // Use rAF so the browser applies the class reset before we write innerHTML,
+    // preventing the "everything snaps to top-right" flash from lingering flex state.
+    requestAnimationFrame(renderHomeScreen);
+}
+function doLogout() { window.AUTH.logout(); }
 
 // ── Navigation (mainframe pages) ─────────────────────────────
 var PAGES = {
@@ -209,7 +240,7 @@ function updateNavAccess() {
     });
     // Rank in sidebar
     var rankEl = document.getElementById('sidebar-rank');
-    if (rankEl) rankEl.textContent = u.divisionRoleName || ('Rank ' + u.divisionRank);
+    if (rankEl) rankEl.textContent = u.divisionRoleName;
 }
 
 // ── Search wire-up ────────────────────────────────────────────
@@ -264,7 +295,7 @@ function populateProfileCard() {
     var card   = document.getElementById('profile-card');
     if (nameEl) nameEl.textContent = u.robloxUsername || u.discordUsername;
     if (rankEl) rankEl.textContent = u.divisionRoleName
-        ? u.divisionRoleName + ' \u00b7 ' + u.divisionRank
+        ? u.divisionRoleName + ' \u00b7 '
         : 'Rank ' + u.divisionRank;
     if (card) card.style.display = 'flex';
 }
@@ -293,12 +324,46 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+// ── Quick link — ?link=<section|form-key> ─────────────────────
+// Detect once on load; consumed after first use.
+var _quickLink = (function () {
+    try {
+        return new URLSearchParams(window.location.search).get('link') || null;
+    } catch (_) { return null; }
+})();
+
+// When a mainframe form is requested via quick link, stash the page key here
+// so loadMainframe() navigates there once data is ready.
+var _pendingPage = null;
+
+function _handleQuickLink() {
+    if (!_quickLink) return;
+    var link = _quickLink;
+    _quickLink = null; // consume
+
+    // Mainframe section pages — enter mainframe, then navigate to the page
+    var mfPages = ['form-eventlog', 'form-editeventlog', 'form-transfer', 'form-exemption', 'form-missingap',
+                   'settings', 'activity', 'officers', 'honored', 'departments', 'weekly', 'monthly'];
+    if (mfPages.indexOf(link) !== -1) {
+        _pendingPage = link;
+        enterMainframe();
+        return;
+    }
+    // Top-level sections
+    if (link === 'mainframe')      { enterMainframe(); return; }
+    if (link === 'div-objectives') { enterObjectives(); return; }
+    if (link === 'deployment')     { enterDIS(); return; }
+    if (link === 'admin')          { enterAdmin(); return; }
+}
+
 // ── Load mainframe data ───────────────────────────────────────
 function loadMainframe() {
     if (window._D) {
         updateNavAccess();
         populateProfileCard();
-        setContent(renderSettings(window._D));
+        var pageKey = _pendingPage || 'settings';
+        _pendingPage = null;
+        if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(window._D)); }
         return;
     }
     var ls = document.getElementById('loading-status');
@@ -312,7 +377,9 @@ function loadMainframe() {
             setMembers(results[1] || []);
             updateNavAccess();
             populateProfileCard();
-            setContent(renderSettings(window._D));
+            var pageKey = _pendingPage || 'settings';
+            _pendingPage = null;
+            if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(window._D)); }
             var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
@@ -329,15 +396,27 @@ function loadMainframe() {
         setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Setup Required</div><h1>Set Your Script URL</h1><div class="sub">Edit config.js and set your Apps Script /exec URL.</div></div></div>');
         return;
     }
-    window.AUTH.load().then(function (user) {
+    // Run version check and session load in parallel.
+    // checkVersion() busts stale localStorage caches before any data is read,
+    // so users automatically get fresh data after a new deployment.
+    Promise.all([
+        window.AUTH.load(),
+        API.checkVersion()
+    ]).then(function (results) {
+        var user = results[0];
         document.getElementById('loading').classList.add('hidden');
         if (!user) {
             document.getElementById('login-screen').classList.remove('hidden');
         } else {
-            // Load admin perms in parallel, then show home screen
+            // Load admin perms in parallel, then show home screen (or quick link target)
             window.AUTH.loadAdminPerms().then(function () {
                 document.getElementById('home-screen').classList.remove('hidden');
-                renderHomeScreen();
+                if (_quickLink) {
+                    renderHomeScreen();
+                    _handleQuickLink();
+                } else {
+                    renderHomeScreen();
+                }
             });
         }
     });

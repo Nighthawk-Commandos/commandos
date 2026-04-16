@@ -59,9 +59,15 @@ exports.handler = async (event) => {
 
     if (!type || !action || !id || !token) return resultPage(false, 'Missing required parameters.');
     if (action !== 'approve' && action !== 'deny') return resultPage(false, 'Invalid action.');
+    if (!['transfer', 'exemption', 'editeventlog', 'missingap'].includes(type)) return resultPage(false, 'Invalid request type.');
     if (!reviewer) return resultPage(false, 'Reviewer username is required.');
+    // Length guards to prevent oversized payloads being forwarded to Apps Script
+    if (id.length > 128)       return resultPage(false, 'Request ID too long.');
+    if (token.length > 256)    return resultPage(false, 'Token too long.');
+    if (reviewer.length > 64)  return resultPage(false, 'Reviewer username too long.');
+    if (notes.length > 2000)   return resultPage(false, 'Notes too long (max 2000 characters).');
 
-    const scriptUrl = window.SCRIPT_URL;
+    const scriptUrl = process.env.SCRIPT_URL;
     if (!scriptUrl) return resultPage(false, 'Server configuration error: SCRIPT_URL not set.');
 
     try {

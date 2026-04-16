@@ -48,6 +48,11 @@ from   = "/api/admin/audit"
 to     = "/.netlify/functions/admin-audit"
 status = 200
 
+[[redirects]]
+from   = "/api/admin/errors"
+to     = "/.netlify/functions/admin-errors"
+status = 200
+
 # ── Callback API redirects ──────────────────────────────────────
 [[redirects]]
 from   = "/api/callback/review"
@@ -57,6 +62,24 @@ status = 200
 [[redirects]]
 from   = "/api/callback/process"
 to     = "/.netlify/functions/callback-process"
+status = 200
+
+# ── Admin officer management ────────────────────────────────────
+[[redirects]]
+from   = "/api/admin/officers"
+to     = "/.netlify/functions/admin-officers"
+status = 200
+
+# ── Mainframe data cache proxy ───────────────────────────────────
+[[redirects]]
+from   = "/api/mainframe/data"
+to     = "/.netlify/functions/mainframe-data"
+status = 200
+
+# ── Deploy version (client-side cache busting) ──────────────────
+[[redirects]]
+from   = "/api/version"
+to     = "/.netlify/functions/version"
 status = 200
 
 # ── DIS API redirects ───────────────────────────────────────────
@@ -112,4 +135,4 @@ X-Frame-Options        = "DENY"
 X-Content-Type-Options = "nosniff"
 Referrer-Policy        = "strict-origin-when-cross-origin"
 Permissions-Policy     = "camera=(), microphone=(), geolocation=()"
-Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com;"
+Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com https://cdn.discordapp.com https://media.discordapp.net data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com;"

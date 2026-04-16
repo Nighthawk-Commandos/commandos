@@ -34,22 +34,33 @@ function parseCookies(header) {
 }
 
 exports.handler = async function (event) {
-    const secret  = process.env.SESSION_SECRET || 'change-this-secret-in-netlify-env';
+    const secret = process.env.SESSION_SECRET;
+    if (!secret) {
+        console.error('[auth-me] FATAL: SESSION_SECRET env var is not set');
+        return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+            body: JSON.stringify({ error: 'server_misconfigured' })
+        };
+    }
+
     const cookies = parseCookies(event.headers.cookie || '');
     const token   = cookies['cmd_session'];
 
+    const secHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+
     if (!token) {
-        return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'not_authenticated' }) };
+        return { statusCode: 401, headers: secHeaders, body: JSON.stringify({ error: 'not_authenticated' }) };
     }
 
     const session = verifySession(token, secret);
     if (!session) {
-        return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'invalid_session' }) };
+        return { statusCode: 401, headers: secHeaders, body: JSON.stringify({ error: 'invalid_session' }) };
     }
 
     return {
         statusCode: 200,
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        headers: secHeaders,
         body: JSON.stringify(session)
     };
 };

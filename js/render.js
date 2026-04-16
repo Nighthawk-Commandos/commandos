@@ -58,9 +58,12 @@ function fmt2(v) {
     return n % 1 === 0 ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
 }
 function fmtPct(v) {
-    if (!v) return '—';
+    if (v === null || v === undefined) return '—';
+
     var n = parseFloat(v);
-    return isNaN(n) ? esc(String(v)) : n.toFixed(2) + '%';
+    if (isNaN(n)) return esc(String(v));
+
+    return (n * 100).toFixed(2) + '%';
 }
 function setToday(id) {
     var el = $(id); if (!el) return;
@@ -520,7 +523,6 @@ var ADMIN_PERM_GROUPS = [
 ];
 
 function renderUnifiedAdmin() {
-    var ap = window.AUTH.adminPerms;
     var hs = document.getElementById('home-screen');
     if (!hs) return;
 
@@ -533,10 +535,17 @@ function renderUnifiedAdmin() {
         { key: 'points',    label: 'Points',    canSee: window.AUTH.canAdminTab('points')    },
         { key: 'raffle',    label: 'Raffle',    canSee: window.AUTH.canAdminTab('raffle')    },
         { key: 'gamepool',  label: 'Game Pool', canSee: window.AUTH.canAdminTab('gamepool')  },
-        { key: 'audit',     label: 'Audit Log', canSee: window.AUTH.canAdminTab('audit')     }
+        { key: 'audit',     label: 'Audit Log', canSee: window.AUTH.canAdminTab('audit')     },
+        { key: 'errors',    label: 'Errors',    canSee: window.AUTH.canAdminTab('errors')    }
     ].filter(function (t) { return t.canSee; });
 
+    // Pick default tab if needed
+    if (!_ADMIN.tab || !tabDefs.some(function (t) { return t.key === _ADMIN.tab; })) {
+        _ADMIN.tab = tabDefs.length ? tabDefs[0].key : null;
+    }
+
     if (tabDefs.length === 0) {
+        hs.className = '';
         hs.innerHTML =
             '<div class="bg-grid"></div><div class="home-inner" style="padding-top:40px">' +
             '<div class="dis-wrap"><div class="info-block">' +
@@ -546,52 +555,42 @@ function renderUnifiedAdmin() {
         return;
     }
 
-    // Pick default tab if needed
-    if (!_ADMIN.tab || !tabDefs.some(function (t) { return t.key === _ADMIN.tab; })) {
-        _ADMIN.tab = tabDefs[0].key;
-    }
-
-    var tabHtml = tabDefs.map(function (t) {
-        return '<button class="dis-admin-tab' + (_ADMIN.tab === t.key ? ' active' : '') +
-            '" onclick="adminTab(\'' + t.key + '\')">' + esc(t.label) + '</button>';
+    var navHtml = tabDefs.map(function (t) {
+        return '<div class="obj-nav-item' + (_ADMIN.tab === t.key ? ' active' : '') +
+            '" data-admintab="' + esc(t.key) + '" onclick="adminTab(\'' + esc(t.key) + '\')">' +
+            '<div class="obj-nav-dot"></div>' + esc(t.label) + '</div>';
     }).join('');
 
+    hs.className = 'obj-mode';
     hs.innerHTML =
         '<div class="bg-grid"></div>' +
-        '<div class="home-inner" style="padding-top:40px">' +
-        '<div class="dis-wrap">' +
-        '<div class="dis-header">' +
-        '<div class="dis-header-left">' +
-        '<div class="dis-eyebrow">NIGHTHAWK COMMANDOS &mdash; SYSTEM</div>' +
-        '<div class="dis-title">Admin Dashboard</div>' +
-        '</div>' +
-        '<div class="dis-nav">' +
-        '<button class="dis-nav-btn" data-click="showHomeScreen">&#8592; Hub</button>' +
-        '</div>' +
-        '</div>' +
-        '<div class="dis-admin-tabs">' + tabHtml + '</div>' +
-        '<div id="admin-body"></div>' +
-        '</div></div>';
+        '<aside class="obj-sidebar" id="admin-sidebar">' +
+            '<div class="obj-sidebar-logo">' +
+                '<div class="obj-sidebar-label">TNI:C Commandos</div>' +
+                '<div class="obj-sidebar-title">Admin Dashboard</div>' +
+            '</div>' +
+            '<div class="obj-sidebar-back">' +
+                '<button class="btn-ghost" data-click="showHomeScreen">\u2190 Back to Hub</button>' +
+            '</div>' +
+            '  <nav class="obj-nav" id="dis-nav">' +
+        '    <div class="obj-nav-group">Tools</div>' +
+            navHtml +
+        '</aside>' +
+        '<main class="obj-main" id="admin-body"></main>';
 
     _adminRenderTab();
 }
 
 function adminTab(key) {
     _ADMIN.tab = key;
-    var tabs = document.querySelectorAll('.dis-admin-tab');
-    tabs.forEach(function (b) {
-        b.classList.toggle('active', b.textContent.trim() === _getAdminTabLabel(key));
-    });
-    // Re-match by onclick attribute is cleaner:
-    tabs.forEach(function (b) {
-        b.classList.remove('active');
-        if (b.getAttribute('onclick') === 'adminTab(\'' + key + '\')') b.classList.add('active');
+    document.querySelectorAll('.obj-nav-item[data-admintab]').forEach(function (el) {
+        el.classList.toggle('active', el.dataset.admintab === key);
     });
     _adminRenderTab();
 }
 
 function _getAdminTabLabel(key) {
-    var map = { roles: 'Roles', mainframe: 'Mainframe', sync: 'Sync', tiles: 'Tiles', points: 'Points', raffle: 'Raffle', gamepool: 'Game Pool', audit: 'Audit Log' };
+    var map = { roles: 'Roles', mainframe: 'Mainframe', sync: 'Sync', tiles: 'Tiles', points: 'Points', raffle: 'Raffle', gamepool: 'Game Pool', audit: 'Audit Log', errors: 'Errors' };
     return map[key] || key;
 }
 
@@ -601,6 +600,7 @@ function _adminRenderTab() {
     var tab = _ADMIN.tab;
     if (tab === 'roles')     { _adminRenderRoles(body);     return; }
     if (tab === 'mainframe') { _adminRenderMainframe(body); return; }
+    if (tab === 'errors')    { _adminRenderErrors(body);    return; }
     _adminRenderDisTab(tab, body);
 }
 
@@ -617,11 +617,29 @@ function _adminRenderMainframe(body) {
         '<p class="admin-desc">Administrative tools for the Commandos Mainframe.</p></div>';
 
     if (canOfficers) {
+        var rankOpts = [
+            'Interim Warrant Officer','Warrant Officer','Chief Warrant Officer',
+            'Captain','Commandant','Developer','Advisor','Deputy Director','Director'
+        ].map(function (r) { return '<option value="' + esc(r) + '">' + esc(r) + '</option>'; }).join('');
+
         html +=
             '<div class="info-block" style="margin-bottom:16px">' +
             '<h3>Officers Tracker</h3>' +
-            '<p class="admin-desc" id="admin-mf-officers-desc">Manage officers — add or remove entries from the tracker.</p>' +
-            '<div id="admin-mf-officers"><p class="admin-desc" style="color:var(--muted)">Coming soon.</p></div>' +
+            '<p class="admin-desc">Add or remove entries from the Officers Tracker.</p>' +
+            '<div class="admin-section-title" style="margin-top:12px">Add Officer</div>' +
+            '<div class="dis-inline-form" style="flex-wrap:wrap;gap:8px;margin-bottom:4px">' +
+            '<div class="ac-wrap" style="flex:1;min-width:140px"><input class="ac-input" id="admin-mf-add-inp" placeholder="Type to search\u2026" autocomplete="off"><div class="ac-dropdown" id="admin-mf-add-dd"></div></div>' +
+            '<select id="admin-mf-add-rank" class="admin-role-select" style="flex:1;min-width:160px">' +
+            '<option value="">\u2014 Select rank \u2014</option>' + rankOpts + '</select>' +
+            '<button id="admin-mf-add-btn" class="btn-dis-primary" onclick="adminAddOfficer()">Add Officer</button>' +
+            '</div>' +
+            '<div id="admin-mf-add-res" style="font-size:12px;min-height:18px"></div>' +
+            '<div class="admin-section-title" style="margin-top:16px">Remove Officer</div>' +
+            '<div class="dis-inline-form" style="flex-wrap:wrap;gap:8px;margin-bottom:4px">' +
+            '<div class="ac-wrap" style="flex:1;min-width:160px"><input class="ac-input" id="admin-mf-rm-inp" placeholder="Type to search\u2026" autocomplete="off"><div class="ac-dropdown" id="admin-mf-rm-dd"></div></div>' +
+            '<button id="admin-mf-rm-btn" class="btn-dis-primary" style="background:#c0392b" onclick="adminRemoveOfficer()">Remove Officer</button>' +
+            '</div>' +
+            '<div id="admin-mf-rm-res" style="font-size:12px;min-height:18px"></div>' +
             '</div>';
     }
 
@@ -635,7 +653,33 @@ function _adminRenderMainframe(body) {
     }
 
     body.innerHTML = html;
+
+    if (canOfficers) {
+        _initOfficerAC();
+    }
 }
+
+// Wires up autocomplete on the officer add/remove inputs.
+// If GROUP_MEMBERS is empty (admin came here without loading mainframe),
+// fetch them first then init.
+function _initOfficerAC() {
+    function wire() {
+        initSingleAC('admin-mf-add-inp', 'admin-mf-add-dd', 'pickAdminOfficerAdd');
+        initSingleAC('admin-mf-rm-inp',  'admin-mf-rm-dd',  'pickAdminOfficerRm');
+        docOutsideClick([['admin-mf-add-inp','admin-mf-add-dd'],['admin-mf-rm-inp','admin-mf-rm-dd']]);
+    }
+    if (GROUP_MEMBERS.length) {
+        wire();
+    } else {
+        API.getGroupMembers().then(function (members) {
+            setMembers(members);
+            wire();
+        }).catch(function () { wire(); }); // wire anyway so inputs still work
+    }
+}
+
+function pickAdminOfficerAdd(name) { sv('admin-mf-add-inp', name); closeAC('admin-mf-add-dd'); }
+function pickAdminOfficerRm(name)  { sv('admin-mf-rm-inp',  name); closeAC('admin-mf-rm-dd');  }
 
 // ── DIS tab wrapper (ensures state is loaded first) ───────────
 function _adminRenderDisTab(tabKey, body) {
@@ -771,15 +815,22 @@ function _adminBuildRolesUI(body, roles, list) {
     if (list.length) {
         html += '<div class="admin-user-list">';
         list.forEach(function (e) {
+            var assignedIds = Array.isArray(e.roleIds) && e.roleIds.length ? e.roleIds
+                : (e.roleId ? [e.roleId] : []);
             html += '<div class="admin-user-row">' +
+                '<div class="admin-user-info">' +
                 '<div class="admin-user-label">' + esc(e.label || e.discordId) + '</div>' +
-                '<div class="admin-user-id">' + esc(e.discordId) + '</div>';
+                '<div class="admin-user-id">' + esc(e.discordId) + '</div>' +
+                '</div>';
             if (canAssign) {
-                html += _adminRoleSelectHTML(roles, e.roleId || '', e.discordId) +
-                    '<button class="admin-remove-btn" onclick="adminRemoveUser(\'' + esc(e.discordId) + '\')">Remove</button>';
+                html += _adminRoleCheckboxesHTML(roles, assignedIds, e.discordId) +
+                    '<button class="admin-remove-btn" onclick="adminRemoveUser(\'' + ea(e.discordId) + '\')">Remove</button>';
             } else {
-                var assignedRole = e.roleId ? roles.find(function (r) { return r.id === e.roleId; }) : null;
-                html += '<span style="font-size:11px;color:var(--muted)">' + esc(assignedRole ? assignedRole.name : '—') + '</span>';
+                var roleNames = assignedIds.map(function (rid) {
+                    var r = roles.find(function (rr) { return rr.id === rid; });
+                    return r ? r.name : '';
+                }).filter(Boolean);
+                html += '<span style="font-size:11px;color:var(--muted)">' + esc(roleNames.length ? roleNames.join(', ') : '\u2014') + '</span>';
             }
             html += '</div>';
         });
@@ -790,13 +841,13 @@ function _adminBuildRolesUI(body, roles, list) {
 
     if (canAssign) {
         html += '<div class="info-block" style="margin-top:12px"><h3>Add User</h3>' +
-            '<div class="dis-inline-form" style="margin-bottom:10px">' +
+            '<div class="dis-inline-form" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
             '<input id="admin-new-user-id" class="admin-input" placeholder="Discord ID" style="width:180px">' +
             '<input id="admin-new-user-label" class="admin-input" placeholder="Display name (optional)" style="flex:1">' +
             '</div>' +
-            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
-            '<label style="font-size:12px;color:var(--muted)">Role:</label>' +
-            _adminRoleSelectHTML(roles, '', 'new-user') +
+            '<div style="margin-bottom:12px">' +
+            '<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Roles:</label>' +
+            _adminRoleCheckboxesHTML(roles, [], 'new-user') +
             '</div>' +
             '<button class="btn-dis-primary" onclick="adminAddUser()">Add User</button></div>';
     }
@@ -822,16 +873,18 @@ function _adminRoleCardViewHTML(role, enabledPerms, canManage) {
     return html + '</div>';
 }
 
-// ── Role <select> helper ──────────────────────────────────────
-function _adminRoleSelectHTML(roles, currentRoleId, discordId) {
+// ── Multi-role checkbox group helper ──────────────────────────
+function _adminRoleCheckboxesHTML(roles, selectedIds, discordId) {
     var isNew = (discordId === 'new-user');
-    var html = '<select class="admin-role-select"' +
-        (isNew ? ' id="admin-new-user-role"' : ' onchange="adminAssignRole(this,\'' + esc(discordId) + '\')"') + '>';
-    html += '<option value=""' + (!currentRoleId ? ' selected' : '') + '>\u2014 No role</option>';
+    if (!roles.length) return '<span style="font-size:11px;color:var(--muted)">No roles defined</span>';
+    var html = '<div class="admin-role-checks" id="admin-roles-' + esc(discordId) + '">';
     roles.forEach(function (r) {
-        html += '<option value="' + esc(r.id) + '"' + (r.id === currentRoleId ? ' selected' : '') + '>' + esc(r.name) + '</option>';
+        var checked = selectedIds.indexOf(r.id) > -1;
+        var onChange = isNew ? '' : ' onchange="adminToggleUserRole(this,\'' + ea(discordId) + '\')"';
+        html += '<label class="admin-role-check"><input type="checkbox" value="' + esc(r.id) + '"' +
+            (checked ? ' checked' : '') + onChange + '> ' + esc(r.name) + '</label>';
     });
-    return html + '</select>';
+    return html + '</div>';
 }
 
 // ── Role card inline edit ─────────────────────────────────────
@@ -927,31 +980,43 @@ function adminSaveNewRole() {
 }
 
 // ── User management ────────────────────────────────────────────
-function adminAssignRole(selectEl, discordId) {
-    selectEl.disabled = true;
+function adminToggleUserRole(cb, discordId) {
+    var container = document.getElementById('admin-roles-' + discordId);
+    var roleIds = [];
+    if (container) {
+        container.querySelectorAll('input[type=checkbox]:checked').forEach(function (c) { roleIds.push(c.value); });
+        container.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.disabled = true; });
+    }
     fetch('/api/admin/allowlist', {
         method: 'PATCH', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ discordId: discordId, roleId: selectEl.value })
+        body: JSON.stringify({ discordId: discordId, roleIds: roleIds })
     }).then(function (r) { return r.json(); })
         .then(function (res) {
-            if (res.success) { toast('Role assigned', 'success'); _adminReloadRoles(); }
-            else { selectEl.disabled = false; toast('Error: ' + (res.error || 'Unknown'), 'error'); }
-        }).catch(function () { selectEl.disabled = false; toast('Request failed', 'error'); });
+            if (container) container.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.disabled = false; });
+            if (res.success) toast('Roles updated', 'success');
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () {
+            if (container) container.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.disabled = false; });
+            toast('Request failed', 'error');
+        });
 }
 
 function adminAddUser() {
-    var id     = ((document.getElementById('admin-new-user-id')    || {}).value || '').trim();
-    var label  = ((document.getElementById('admin-new-user-label') || {}).value || '').trim();
-    var roleEl = document.getElementById('admin-new-user-role');
-    var roleId = roleEl ? roleEl.value : '';
+    var id    = ((document.getElementById('admin-new-user-id')    || {}).value || '').trim();
+    var label = ((document.getElementById('admin-new-user-label') || {}).value || '').trim();
+    var roleIds = [];
+    var roleContainer = document.getElementById('admin-roles-new-user');
+    if (roleContainer) {
+        roleContainer.querySelectorAll('input[type=checkbox]:checked').forEach(function (c) { roleIds.push(c.value); });
+    }
     if (!id) { toast('Enter a Discord ID', 'error'); return; }
-    var body = { discordId: id, label: label || id };
-    if (roleId) body.roleId = roleId;
+    var payload = { discordId: id, label: label || id };
+    if (roleIds.length) payload.roleIds = roleIds;
     fetch('/api/admin/allowlist', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
         .then(function (res) {
             if (res.success) { toast('User added', 'success'); _adminReloadRoles(); }
@@ -977,6 +1042,109 @@ function _adminReloadRoles() {
     if (body && _ADMIN.tab === 'roles') _adminRenderRoles(body);
 }
 
+// ── Errors tab ────────────────────────────────────────────────
+function _adminRenderErrors(body) {
+    body.innerHTML = '<div class="obj-loading">Loading error log\u2026</div>';
+    fetch('/api/admin/errors', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            var log = Array.isArray(res.log) ? res.log.slice().reverse() : [];
+            if (log.length === 0) {
+                body.innerHTML = '<div class="empty">No errors logged.</div>';
+                return;
+            }
+            var html = '<div class="info-block" style="margin-bottom:16px">' +
+                '<h3>Error Log</h3>' +
+                '<p class="admin-desc">Failed admin actions. Last ' + log.length + ' entries, most recent first.</p>' +
+                '</div>' +
+                '<div class="tbl-wrap"><table>' +
+                '<thead><tr><th>Time</th><th>Action</th><th>Error</th><th>Details</th></tr></thead><tbody>';
+            log.forEach(function (entry) {
+                html += '<tr>' +
+                    '<td style="white-space:nowrap;font-size:11px">' + esc(new Date(entry.timestamp).toLocaleString()) + '</td>' +
+                    '<td><span class="badge b-incomplete">' + esc(entry.action || '\u2014') + '</span></td>' +
+                    '<td style="font-size:11px;color:#e05252;max-width:260px;word-break:break-word">' + esc(entry.error || '\u2014') + '</td>' +
+                    '<td style="font-size:11px;color:var(--muted);word-break:break-all">' + esc(JSON.stringify(entry.details || {})) + '</td>' +
+                    '</tr>';
+            });
+            body.innerHTML = html + '</tbody></table></div>';
+        })
+        .catch(function (e) {
+            body.innerHTML = '<div class="obj-error">Failed to load error log: ' + esc(e.message) + '</div>';
+        });
+}
+
+// ── Officer management ────────────────────────────────────────
+function adminAddOfficer() {
+    var username = ((document.getElementById('admin-mf-add-inp') || {}).value || '').trim();
+    var rank     = ((document.getElementById('admin-mf-add-rank') || {}).value || '').trim();
+    if (!username) { toast('Enter a username', 'error'); return; }
+    if (!rank)     { toast('Select a rank', 'error'); return; }
+    if (GROUP_MEMBERS.length && GROUP_MEMBERS.indexOf(username) === -1) {
+        toast('"' + username + '" is not in the group members list', 'error');
+        setHTML('admin-mf-add-res', '<span style="color:#c0392b">Not found in group members list.</span>');
+        return;
+    }
+    btnBusy('admin-mf-add-btn', 'Adding\u2026');
+    fetch('/api/admin/officers', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', username: username, rank: rank })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            btnDone('admin-mf-add-btn', 'Add Officer');
+            if (res.ok) {
+                toast('Officer added', 'success');
+                sv('admin-mf-add-inp', ''); sv('admin-mf-add-rank', '');
+                setHTML('admin-mf-add-res', '<span style="color:#27ae60">Added: ' + esc(username) + ' (' + esc(rank) + ')</span>');
+                API.bustCache('c:allData');
+            } else {
+                toast('Error: ' + (res.error || 'Unknown'), 'error');
+                setHTML('admin-mf-add-res', '<span style="color:#c0392b">' + esc(res.error || 'Failed') + '</span>');
+            }
+        }).catch(function () {
+            btnDone('admin-mf-add-btn', 'Add Officer');
+            toast('Request failed', 'error');
+        });
+}
+
+function adminRemoveOfficer() {
+    var username = ((document.getElementById('admin-mf-rm-inp') || {}).value || '').trim();
+    if (!username) { toast('Enter a username', 'error'); return; }
+    if (GROUP_MEMBERS.length && GROUP_MEMBERS.indexOf(username) === -1) {
+        toast('"' + username + '" is not in the group members list', 'error');
+        setHTML('admin-mf-rm-res', '<span style="color:#c0392b">Not found in group members list.</span>');
+        return;
+    }
+    if (!confirm('Remove officer "' + username + '" from the tracker?')) return;
+    btnBusy('admin-mf-rm-btn', 'Removing\u2026');
+    fetch('/api/admin/officers', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', username: username })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            btnDone('admin-mf-rm-btn', 'Remove Officer');
+            if (res.ok) {
+                toast('Officer removed', 'success');
+                sv('admin-mf-rm-inp', '');
+                setHTML('admin-mf-rm-res', '<span style="color:#27ae60">Removed: ' + esc(username) + '</span>');
+                API.bustCache('c:allData');
+            } else {
+                var msg = res.error || 'Failed';
+                var detail = '';
+                if (res.found && res.found.length) {
+                    detail = '<div style="font-size:11px;color:var(--muted);margin-top:4px">Names in sheet: ' + esc(res.found.join(', ')) + '</div>';
+                }
+                toast('Error: ' + msg, 'error');
+                setHTML('admin-mf-rm-res', '<span style="color:#c0392b">' + esc(msg) + '</span>' + detail);
+            }
+        }).catch(function () {
+            btnDone('admin-mf-rm-btn', 'Remove Officer');
+            toast('Request failed', 'error');
+        });
+}
+
 // ── Form field helpers ────────────────────────────────────────
 function fld(id, label, req, inputHtml, errMsg) {
     return '<div class="field" id="'+id+'"><label>'+esc(label)+(req?' <span class="req-star">*</span>':'')+' </label>'+
@@ -998,4 +1166,3 @@ function clrFieldErr(id) {
     var e=f.querySelector('.field-error'); if(e) e.style.display='none';
 }
 function clrAll(ids) { ids.forEach(clrFieldErr); }
-

@@ -1,10 +1,11 @@
 // ── POST /api/dis/admin — all admin actions for the DIS
 // Actions: unlock-tile, lock-tile, force-claim, adjust-points,
 //          adjust-raffle, set-multiplier, set-tile-eventtype,
-//          reset-week, regenerate-board, get-audit
+//          reset-week, regenerate-board, get-audit,
+//          advance-week, advance-month
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, json, getCurrentWeekNumber, invalidateCache } = require('./_shared');
+const { blobsStore, verifySession, getUserAdminPerms, json, getCurrentWeekNumber, invalidateCache, addErrorLog, sendErrorWebhook, sendAuditWebhook } = require('./_shared');
 
 async function addAudit(store, adminId, action, details) {
     let log;
@@ -27,6 +28,8 @@ const ACTION_PERMS = {
     'set-multiplier':     'disSync',
     'reset-week':         'disSync',
     'regenerate-board':   'disSync',
+    'advance-week':       'disSync',
+    'advance-month':      'disSync',
     'get-audit':          'disAudit'
 };
 
@@ -55,6 +58,21 @@ exports.handler = async (event) => {
     const store   = blobsStore('commandos-dis');
     const adminId = session.robloxUsername || session.discordId;
 
+    try {
+        return await _handleAction(body, store, adminId);
+    } catch (err) {
+        await addErrorLog(adminStore, body.action || 'unknown', err, { adminId, action: body.action }).catch(() => {});
+        await sendErrorWebhook(
+            'DIS Admin Error: ' + (body.action || 'unknown'),
+            err.message || String(err),
+            { adminId, action: body.action }
+        ).catch(() => {});
+        return json(500, { error: 'Internal server error: ' + err.message });
+    }
+};
+
+async function _handleAction(body, store, adminId) {
+
     // ── get-audit ────────────────────────────────────────────────
     if (body.action === 'get-audit') {
         const log = await store.get('audit', { type: 'json' }).catch(() => []);
@@ -73,7 +91,6 @@ exports.handler = async (event) => {
         if (!tile) return json(404, { error: 'Tile not found' });
         const prevUser = tile.completedBy;
 
-        // Deduct points from user if tile was completed
         if (tile.completed && prevUser) {
             let users = await store.get('users', { type: 'json' }).catch(() => ({}));
             users = users || {};
@@ -94,6 +111,7 @@ exports.handler = async (event) => {
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'UNLOCK_TILE', { position: pos, prevUser });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'UNLOCK_TILE', { position: pos + 1, prevUser: prevUser || '—' });
         return json(200, { ok: true });
     }
 
@@ -111,6 +129,7 @@ exports.handler = async (event) => {
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'LOCK_TILE', { position: pos });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'LOCK_TILE', { position: pos + 1 });
         return json(200, { ok: true });
     }
 
@@ -120,6 +139,7 @@ exports.handler = async (event) => {
         const username = typeof body.username === 'string' ? body.username.trim() : null;
         if (isNaN(pos) || pos < 0 || pos > 24) return json(400, { error: 'Invalid position' });
         if (!username) return json(400, { error: 'Username required' });
+        if (username.length > 50) return json(400, { error: 'Username too long (max 50 chars)' });
 
         let board = await store.get('board', { type: 'json' }).catch(() => null);
         if (!board) return json(404, { error: 'No board' });
@@ -149,6 +169,7 @@ exports.handler = async (event) => {
         await store.set('users', JSON.stringify(users));
         await addAudit(store, adminId, 'FORCE_CLAIM', { position: pos, username, points: pts });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'FORCE_CLAIM', { position: pos + 1, username, points: pts });
         return json(200, { ok: true });
     }
 
@@ -157,7 +178,9 @@ exports.handler = async (event) => {
         const username = typeof body.username === 'string' ? body.username.trim() : null;
         const delta    = Number(body.delta);
         if (!username)  return json(400, { error: 'Username required' });
-        if (isNaN(delta)) return json(400, { error: 'Delta must be a number' });
+        if (username.length > 50) return json(400, { error: 'Username too long (max 50 chars)' });
+        if (isNaN(delta) || !Number.isFinite(delta)) return json(400, { error: 'Delta must be a finite number' });
+        if (Math.abs(delta) > 10000) return json(400, { error: 'Delta too large (max ±10000 per operation)' });
 
         let users = await store.get('users', { type: 'json' }).catch(() => ({}));
         users = users || {};
@@ -167,6 +190,7 @@ exports.handler = async (event) => {
         await store.set('users', JSON.stringify(users));
         await addAudit(store, adminId, 'ADJUST_POINTS', { username, delta, newTotal: users[username].points });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'ADJUST_POINTS', { username, delta, newTotal: users[username].points });
         return json(200, { ok: true, newPoints: users[username].points });
     }
 
@@ -175,7 +199,9 @@ exports.handler = async (event) => {
         const username = typeof body.username === 'string' ? body.username.trim() : null;
         const delta    = parseInt(body.delta, 10);
         if (!username)  return json(400, { error: 'Username required' });
+        if (username.length > 50) return json(400, { error: 'Username too long (max 50 chars)' });
         if (isNaN(delta)) return json(400, { error: 'Delta must be an integer' });
+        if (Math.abs(delta) > 500) return json(400, { error: 'Delta too large (max ±500 per operation)' });
 
         let users = await store.get('users', { type: 'json' }).catch(() => ({}));
         users = users || {};
@@ -185,6 +211,7 @@ exports.handler = async (event) => {
         await store.set('users', JSON.stringify(users));
         await addAudit(store, adminId, 'ADJUST_RAFFLE', { username, delta, newTotal: users[username].raffleEntries });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'ADJUST_RAFFLE', { username, delta, newTotal: users[username].raffleEntries });
         return json(200, { ok: true, newEntries: users[username].raffleEntries });
     }
 
@@ -205,6 +232,7 @@ exports.handler = async (event) => {
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'SET_TILE_POINTS', { position: pos, prev, points: pts });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'SET_TILE_POINTS', { position: pos + 1, prev, points: pts });
         return json(200, { ok: true });
     }
 
@@ -214,6 +242,7 @@ exports.handler = async (event) => {
         const eventType = typeof body.eventType === 'string' ? body.eventType.trim() : null;
         if (isNaN(pos) || pos < 0 || pos > 24) return json(400, { error: 'Invalid position' });
         if (!eventType) return json(400, { error: 'Event type required' });
+        if (eventType.length > 100) return json(400, { error: 'Event type too long (max 100 chars)' });
 
         let board = await store.get('board', { type: 'json' }).catch(() => null);
         if (!board) return json(404, { error: 'No board' });
@@ -225,6 +254,7 @@ exports.handler = async (event) => {
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'SET_TILE_EVENTTYPE', { position: pos, prev, eventType });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'SET_TILE_EVENTTYPE', { position: pos + 1, prev, eventType });
         return json(200, { ok: true });
     }
 
@@ -241,6 +271,7 @@ exports.handler = async (event) => {
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'SET_MULTIPLIER', { globalMultiplier: val });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'SET_MULTIPLIER', { globalMultiplier: val });
         return json(200, { ok: true, globalMultiplier: val });
     }
 
@@ -261,7 +292,154 @@ exports.handler = async (event) => {
             invalidateCache(store)
         ]);
         await addAudit(store, adminId, 'RESET_WEEK', { weekNumber: getCurrentWeekNumber() });
+        await sendAuditWebhook(adminId, 'RESET_WEEK', { weekNumber: getCurrentWeekNumber() });
         return json(200, { ok: true });
+    }
+
+    // ── advance-week ──────────────────────────────────────────────
+    // Awards +1 raffle entry to top 5 by tiles claimed this week,
+    // saves a week snapshot, resets tile claims for next week.
+    // User points + raffle entries carry forward through the month.
+    if (body.action === 'advance-week') {
+        let board = await store.get('board', { type: 'json' }).catch(() => null);
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+
+        const weekNumber = (board && board.weekNumber) || getCurrentWeekNumber();
+
+        // Rank all users by tiles claimed this week (claimedTiles.length before reset)
+        const ranked = Object.entries(users)
+            .map(([username, data]) => ({
+                username,
+                tiles:         (data.claimedTiles || []).length,
+                points:        data.points || 0,
+                raffleEntries: data.raffleEntries || 0
+            }))
+            .filter(e => e.tiles > 0)
+            .sort((a, b) => b.tiles - a.tiles || b.points - a.points);
+
+        const top5 = ranked.slice(0, 5);
+
+        // Award +1 raffle entry to each of the top 5
+        for (const winner of top5) {
+            if (users[winner.username]) {
+                users[winner.username].raffleEntries = (users[winner.username].raffleEntries || 0) + 1;
+            }
+        }
+
+        // Save a week history snapshot BEFORE clearing tile claims
+        let weekHistory = await store.get('week-history', { type: 'json' }).catch(() => []);
+        if (!Array.isArray(weekHistory)) weekHistory = [];
+        weekHistory.push({
+            weekNumber,
+            archivedAt: new Date().toISOString(),
+            top5:       top5.map(e => ({ username: e.username, tiles: e.tiles, points: e.points })),
+            snapshot:   ranked.map(e => ({ username: e.username, tiles: e.tiles, points: e.points }))
+        });
+        if (weekHistory.length > 52) weekHistory = weekHistory.slice(-52); // keep 1 year
+
+        // Reset claimedTiles for all users (keep points + raffleEntries)
+        for (const username of Object.keys(users)) {
+            users[username].claimedTiles = [];
+            if (!Array.isArray(users[username].history)) users[username].history = [];
+        }
+
+        // Reset board tile claims, increment week number
+        const nextWeek = weekNumber + 1;
+        if (board && board.tiles) {
+            board.tiles = board.tiles.map(t => Object.assign({}, t, {
+                completed: false, completedBy: null, completedAt: null
+            }));
+            board.weekNumber = nextWeek;
+            board.updatedAt  = new Date().toISOString();
+            board.lastSyncAt = null;
+        }
+
+        await Promise.all([
+            store.set('users',        JSON.stringify(users)),
+            board ? store.set('board', JSON.stringify(board)) : Promise.resolve(),
+            store.set('week-history', JSON.stringify(weekHistory)),
+            invalidateCache(store)
+        ]);
+
+        const auditDetails = {
+            weekNumber,
+            nextWeek,
+            top5: top5.map(e => e.username + ' (' + e.tiles + ' tiles)').join(', ') || 'none'
+        };
+        await addAudit(store, adminId, 'ADVANCE_WEEK', auditDetails);
+        await sendAuditWebhook(adminId, 'ADVANCE_WEEK', auditDetails);
+
+        return json(200, {
+            ok: true,
+            weekNumber: nextWeek,
+            top5: top5.map(e => ({ username: e.username, tiles: e.tiles, raffleAwarded: 1 }))
+        });
+    }
+
+    // ── advance-month ─────────────────────────────────────────────
+    // Archives all-time stats, then resets everything for the new month.
+    if (body.action === 'advance-month') {
+        let board = await store.get('board', { type: 'json' }).catch(() => null);
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+
+        const monthLabel = new Date().toISOString().slice(0, 7); // e.g. "2026-04"
+        const weekNumber = (board && board.weekNumber) || getCurrentWeekNumber();
+
+        // Build monthly snapshot for all-time leaderboard
+        const monthSnapshot = Object.entries(users).map(([username, data]) => ({
+            username,
+            points:        data.points        || 0,
+            tiles:         (data.claimedTiles || []).length,
+            raffleEntries: data.raffleEntries  || 0
+        })).filter(e => e.points > 0 || e.tiles > 0 || e.raffleEntries > 0);
+
+        // Load and append to all-time archive
+        let alltime = await store.get('alltime', { type: 'json' }).catch(() => []);
+        if (!Array.isArray(alltime)) alltime = [];
+        alltime.push({
+            month:      monthLabel,
+            archivedAt: new Date().toISOString(),
+            entries:    monthSnapshot
+        });
+        // Keep 24 months
+        if (alltime.length > 24) alltime = alltime.slice(-24);
+
+        // Full reset: clear all user data
+        const emptyUsers = {};
+
+        // Reset board tiles and week number
+        if (board && board.tiles) {
+            board.tiles = board.tiles.map(t => Object.assign({}, t, {
+                completed: false, completedBy: null, completedAt: null
+            }));
+            board.weekNumber    = 1;
+            board.updatedAt     = new Date().toISOString();
+            board.lastSyncAt    = null;
+            board.globalMultiplier = 1;
+        }
+
+        await Promise.all([
+            store.set('users',   JSON.stringify(emptyUsers)),
+            store.set('alltime', JSON.stringify(alltime)),
+            board ? store.set('board', JSON.stringify(board)) : Promise.resolve(),
+            invalidateCache(store)
+        ]);
+
+        const auditDetails = {
+            month:            monthLabel,
+            usersArchived:    monthSnapshot.length,
+            previousWeekNum:  weekNumber
+        };
+        await addAudit(store, adminId, 'ADVANCE_MONTH', auditDetails);
+        await sendAuditWebhook(adminId, 'ADVANCE_MONTH', auditDetails);
+
+        return json(200, {
+            ok: true,
+            month: monthLabel,
+            usersArchived: monthSnapshot.length
+        });
     }
 
     // ── regenerate-board ──────────────────────────────────────────
@@ -271,7 +449,6 @@ exports.handler = async (event) => {
             return json(400, { error: 'Game pool must have at least 25 entries. Currently has ' + gamepool.length + '.' });
         }
 
-        // Fisher-Yates shuffle
         const pool = gamepool.slice();
         for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -307,8 +484,9 @@ exports.handler = async (event) => {
         await store.set('board', JSON.stringify(board));
         await addAudit(store, adminId, 'REGENERATE_BOARD', { weekNumber, tiles: tiles.length });
         await invalidateCache(store);
+        await sendAuditWebhook(adminId, 'REGENERATE_BOARD', { weekNumber, tiles: tiles.length });
         return json(200, { ok: true, weekNumber, tiles: tiles.length });
     }
 
     return json(400, { error: 'Unknown action: ' + body.action });
-};
+}

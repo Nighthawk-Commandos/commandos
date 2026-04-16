@@ -20,17 +20,28 @@ function renderObjectivesSection() {
     var hs = document.getElementById('home-screen');
     if (!hs) return;
 
-    hs.classList.add('obj-mode');
-    hs.innerHTML = _objShellHTML();
-
     var cached = _objCacheGet();
     if (cached) {
+        // Instant path — paint immediately, no loading screen needed
         _objData = cached;
+        hs.className = 'obj-mode';
+        hs.removeAttribute('style');
+        hs.innerHTML = _objShellHTML();
         _objBuildNav();
         _objRenderOverview();
-    } else {
-        _objFetch();
+        return;
     }
+
+    // Show global loading overlay while fetching
+    var loadDiv = document.getElementById('loading');
+    if (loadDiv) loadDiv.classList.remove('hidden');
+    hs.className = 'obj-mode';
+    hs.removeAttribute('style');
+    hs.innerHTML = _objShellHTML();
+
+    _objFetch(function () {
+        if (loadDiv) loadDiv.classList.add('hidden');
+    });
 }
 
 function _objShellHTML() {
@@ -58,9 +69,10 @@ function _objShellHTML() {
 }
 
 // ── Data fetch + cache ────────────────────────────────────────
-function _objFetch() {
+function _objFetch(onDone) {
     var url = window.OBJECTIVES_URL;
     if (!url || url.indexOf('YOUR_') !== -1) {
+        if (onDone) onDone();
         _objSetContent('<div class="empty-state">OBJECTIVES_URL not configured in config.js.</div>');
         return;
     }
@@ -70,10 +82,12 @@ function _objFetch() {
             if (!json.success) throw new Error(json.error || 'Unknown error');
             _objData = json.data;
             _objCacheSet(json.data);
+            if (onDone) onDone();
             _objBuildNav();
             _objRenderOverview();
         })
         .catch(function (e) {
+            if (onDone) onDone();
             _objSetContent('<div class="empty-state" style="color:var(--red)">Failed to load objectives: ' + esc(e.message) + '</div>');
         });
 }

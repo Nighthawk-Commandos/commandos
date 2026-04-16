@@ -15,6 +15,7 @@ const SESSION_TTL    = 7 * 24 * 60 * 60; // 7 days in seconds
 
 // ── Session signing ─────────────────────────────────────────
 function signSession(data, secret) {
+    // Use standard base64 (not base64url) — must match _shared.js verifySession decode.
     const encoded = Buffer.from(JSON.stringify(data)).toString('base64');
     const hmac    = crypto.createHmac('sha256', secret).update(encoded).digest('hex');
     return encoded + '.' + hmac;
@@ -95,23 +96,46 @@ exports.handler = async function (event) {
     const base          = (process.env.URL || 'http://localhost:8888').replace(/\/$/, '');
     const clientId      = process.env.DISCORD_CLIENT_ID;
     const clientSecret  = process.env.DISCORD_CLIENT_SECRET;
-    const secret        = process.env.SESSION_SECRET || 'change-this-secret-in-netlify-env';
+    const secret        = process.env.SESSION_SECRET;
     const rowifiKey     = process.env.ROWIFI_API_KEY || '';
     const guildId       = process.env.DISCORD_GUILD_ID || '';
     const isLocalDev    = base.startsWith('http://localhost');
 
+    // SESSION_SECRET must be set — a missing or default secret allows session forgery.
+    if (!secret) {
+        console.error('[auth-callback] FATAL: SESSION_SECRET env var is not set');
+        return redirectError('auth_failed');
+    }
+
     const params = new URLSearchParams(event.queryStringParameters || {});
     const code   = params.get('code');
+    const state  = params.get('state');
+
+    // Expire the CSRF state cookie regardless of outcome so it can't be replayed.
+    const clearStateCookie = isLocalDev
+        ? 'cmd_oauth_state=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+        : 'cmd_oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
 
     const redirectError = (err) => ({
         statusCode: 302,
-        headers: { Location: '/?error=' + err },
+        multiValueHeaders: {
+            Location:   ['/?error=' + err],
+            'Set-Cookie': [clearStateCookie]
+        },
         body: ''
     });
 
     if (!code)       return redirectError('auth_failed');
     if (!clientId)   return redirectError('auth_failed');
     if (!guildId)    return redirectError('auth_failed');
+
+    // ── OAuth CSRF protection — validate state parameter ──────────
+    const stateCookieMatch = (event.headers.cookie || '').match(/(?:^|;\s*)cmd_oauth_state=([^;]+)/);
+    const storedState      = stateCookieMatch ? decodeURIComponent(stateCookieMatch[1]) : null;
+    if (!state || !storedState || state !== storedState) {
+        console.error('[auth-callback] OAuth state mismatch — possible CSRF attempt');
+        return redirectError('auth_failed');
+    }
 
     try {
         // 1. Exchange code → Discord access token
@@ -141,17 +165,19 @@ exports.handler = async function (event) {
         if (ranks.divisionRank === 0) return redirectError('not_in_group');
 
         // 6. Build session payload
+        const nowSec = Math.floor(Date.now() / 1000);
         const session = {
             discordId:        discordUser.id,
             discordUsername:  discordUser.username,
             discordAvatar:    discordUser.avatar || null,
-            robloxId:         robloxId,
+            robloxId:         String(robloxId),
             robloxUsername:   robloxUsername || 'Unknown',
             divisionRank:     ranks.divisionRank,
             divisionRoleName: ranks.divisionRoleName,
             ghostRank:        ranks.ghostRank,
             ghostRoleName:    ranks.ghostRoleName,
-            exp:              Math.floor(Date.now() / 1000) + SESSION_TTL
+            iat:              nowSec,               // issued-at — used for freshness checks
+            exp:              nowSec + SESSION_TTL
         };
 
         const token       = signSession(session, secret);
@@ -161,9 +187,12 @@ exports.handler = async function (event) {
 
         return {
             statusCode: 302,
-            headers: {
-                Location:   '/',
-                'Set-Cookie': `${SESSION_COOKIE}=${token}; ${cookieFlags}`
+            multiValueHeaders: {
+                Location:   ['/'],
+                'Set-Cookie': [
+                    `${SESSION_COOKIE}=${token}; ${cookieFlags}`,
+                    clearStateCookie
+                ]
             },
             body: ''
         };
