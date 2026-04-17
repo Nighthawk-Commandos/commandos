@@ -23,7 +23,7 @@ var HOME_SECTIONS = [
         title:    'Commandos Mainframe',
         desc:     'Activity & officer trackers, event logs, department data and submission forms.',
         accessFn: function () { return window.AUTH.isInDivision(); },
-        lockMsg:  'Division group membership required.'
+        lockMsg:  'Nighthawk Commandos division membership required.'
     },
     {
         id:       'div-objectives',
@@ -95,7 +95,7 @@ function renderHomeScreen() {
         '<div class="bg-grid"></div>' +
         '<div class="home-inner">' +
         '<div class="home-header">' +
-        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS &mdash; DIVISION HUB</div>' +
+        '<div class="home-eyebrow">THE NIGHTHAWK IMPERIUM &mdash; NIGHTHAWK COMMANDOS</div>' +
         '<h1 class="home-title">Mainframe</h1>' +
         '<div class="home-divider"></div>' +
         '</div>' +
@@ -126,10 +126,12 @@ function enterSection(el) {
 }
 
 function enterAdmin() {
+    if (!window.AUTH || !window.AUTH.canAdminAny()) return;
     renderUnifiedAdmin();
 }
 
 function enterMainframe() {
+    if (!window.AUTH || !window.AUTH.isInDivision()) return;
     document.getElementById('home-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
@@ -137,10 +139,12 @@ function enterMainframe() {
 }
 
 function enterObjectives() {
+    if (!window.AUTH || !window.AUTH.canAccessHigherSections()) return;
     renderObjectivesSection();
 }
 
 function enterDIS() {
+    if (!window.AUTH || !window.AUTH.canSubmitOfficerForms()) return;
     renderDISSection();
 }
 
@@ -151,7 +155,7 @@ function renderSectionPlaceholder(title, msg) {
         '<div class="bg-grid"></div>' +
         '<div class="home-inner">' +
         '<div class="section-ph-head">' +
-        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS</div>' +
+        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS &mdash; TNIC</div>' +
         '<h1 class="home-title">' + esc(title) + '</h1>' +
         '</div>' +
         '<div class="section-placeholder">' +
@@ -349,7 +353,7 @@ function _handleQuickLink() {
         enterMainframe();
         return;
     }
-    // Top-level sections
+    // Top-level sections — enterX functions already enforce access checks
     if (link === 'mainframe')      { enterMainframe(); return; }
     if (link === 'div-objectives') { enterObjectives(); return; }
     if (link === 'deployment')     { enterDIS(); return; }

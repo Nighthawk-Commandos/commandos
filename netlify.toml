@@ -103,6 +103,17 @@ from   = "/api/dis/gamepool"
 to     = "/.netlify/functions/dis-gamepool"
 status = 200
 
+# ── Policy pages ──────────────────────────────────────────────
+[[redirects]]
+from   = "/privacy"
+to     = "/privacy.html"
+status = 200
+
+[[redirects]]
+from   = "/tos"
+to     = "/tos.html"
+status = 200
+
 # ── SPA fallback ───────────────────────────────────────────────
 [[redirects]]
 from   = "/*"

@@ -110,7 +110,7 @@ function cooldown(btnId, wrapId, barId, secs) {
 
 // ── Shared template builders ──────────────────────────────────
 function pageHeader(title, sub) {
-    return '<div class="ph"><div class="ey">TNI:C Commandos Mainframe</div><h1>' + esc(title) + '</h1>' +
+    return '<div class="ph"><div class="ey">Nighthawk Commandos Mainframe</div><h1>' + esc(title) + '</h1>' +
         (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
 }
 function statCard(n, label) {
@@ -566,7 +566,7 @@ function renderUnifiedAdmin() {
         '<div class="bg-grid"></div>' +
         '<aside class="obj-sidebar" id="admin-sidebar">' +
             '<div class="obj-sidebar-logo">' +
-                '<div class="obj-sidebar-label">TNI:C Commandos</div>' +
+                '<div class="obj-sidebar-label">Nighthawk Commandos</div>' +
                 '<div class="obj-sidebar-title">Admin Dashboard</div>' +
             '</div>' +
             '<div class="obj-sidebar-back">' +
@@ -614,7 +614,7 @@ function _adminRenderMainframe(body) {
     var html =
         '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Mainframe Admin</h3>' +
-        '<p class="admin-desc">Administrative tools for the Commandos Mainframe.</p></div>';
+        '<p class="admin-desc">Administrative tools for the Nighthawk Commandos Mainframe.</p></div>';
 
     if (canOfficers) {
         var rankOpts = [
@@ -1151,7 +1151,7 @@ function fld(id, label, req, inputHtml, errMsg) {
         inputHtml+(errMsg?'<div class="field-error">'+esc(errMsg)+'</div>':'')+'</div>';
 }
 function fHead(icon, title, desc) {
-    return '<div class="form-card-head"><div class="form-card-icon">'+icon+'</div>'+
+    return '<div class="form-card-head">'+
         '<div><div class="form-card-title">'+esc(title)+'</div><div class="form-card-desc">'+esc(desc)+'</div></div></div>';
 }
 function honeypot(id) {

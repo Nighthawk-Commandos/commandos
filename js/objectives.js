@@ -49,8 +49,8 @@ function _objShellHTML() {
         '<div class="bg-grid"></div>' +
         '<aside class="obj-sidebar" id="obj-sidebar">' +
         '  <div class="obj-sidebar-logo">' +
-        '    <div class="obj-sidebar-label">TNI Commandos</div>' +
-        '    <div class="obj-sidebar-title">TNI:C<br>Objectives</div>' +
+        '    <div class="obj-sidebar-label">Nighthawk Commandos</div>' +
+        '    <div class="obj-sidebar-title">TNIC<br>Objectives</div>' +
         '  </div>' +
         '  <div class="obj-sidebar-back">' +
         '    <button class="obj-hub-btn" data-click="showHomeScreen">&#8592; Hub</button>' +

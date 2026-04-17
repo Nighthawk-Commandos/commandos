@@ -51,6 +51,10 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'POST') {
         const { name, color, permissions } = body;
         if (!name || !name.trim()) return json(400, { error: 'Name required' });
+        if (name.trim().length > 100) return json(400, { error: 'Name max 100 chars' });
+        if (color && (typeof color !== 'string' || color.length > 30 || !/^#[0-9a-fA-F]{3,8}$/.test(color))) {
+            return json(400, { error: 'color must be a valid hex color' });
+        }
         const newRole = {
             id:          makeId(name.trim()),
             name:        name.trim(),
@@ -67,6 +71,10 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'PATCH') {
         const { id, name, color, permissions } = body;
         if (!id) return json(400, { error: 'id required' });
+        if (name && name.trim().length > 100) return json(400, { error: 'Name max 100 chars' });
+        if (color && (typeof color !== 'string' || color.length > 30 || !/^#[0-9a-fA-F]{3,8}$/.test(color))) {
+            return json(400, { error: 'color must be a valid hex color' });
+        }
         const idx = roles.findIndex(r => r.id === id);
         if (idx === -1) return json(404, { error: 'Role not found' });
         roles[idx] = Object.assign({}, roles[idx], {

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — Nighthawk Commandos Mainframe</title>
+    <link rel="icon" href="https://i.imgur.com/YA7Ilep.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0c0f; --surface: #111318; --surface2: #181b22;
+            --border: rgba(255,255,255,.07); --accent: #c8a44a; --accent2: #e8c96d;
+            --text: #e8e9ec; --muted: #6b7280;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.8; min-height: 100vh; }
+        .wrap { max-width: 720px; margin: 0 auto; padding: 60px 24px 80px; }
+        .back { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; text-decoration: none; margin-bottom: 40px; transition: color .15s; }
+        .back:hover { color: var(--accent); }
+        .eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+        h1 { font-family: 'Syne', sans-serif; font-size: clamp(22px, 5vw, 32px); font-weight: 800; color: var(--text); line-height: 1.15; margin-bottom: 8px; }
+        .meta { font-size: 11px; color: var(--muted); margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+        h2 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--accent2); margin: 36px 0 10px; }
+        p { color: #c4c6cc; margin-bottom: 14px; }
+        ul { color: #c4c6cc; padding-left: 20px; margin-bottom: 14px; }
+        li { margin-bottom: 6px; }
+        a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+        .footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); text-align: center; letter-spacing: .06em; }
+        .top-bar { height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: .5; margin-bottom: 0; }
+    </style>
+</head>
+<body>
+<div class="top-bar"></div>
+<div class="wrap">
+    <a class="back" href="/">&#8592; Back to Mainframe</a>
+
+    <div class="eyebrow">The Nighthawk Imperium &mdash; Nighthawk Commandos</div>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: April 2026 &nbsp;&middot;&nbsp; Applies to the Nighthawk Commandos Mainframe</p>
+
+    <h2>1. Overview</h2>
+    <p>The Nighthawk Commandos Mainframe (&ldquo;the System&rdquo;) is an internal web application operated by The Nighthawk Imperium for the exclusive use of Nighthawk Commandos (TNIC) division members. This policy describes what data is collected, how it is used, and your rights in relation to that data.</p>
+
+    <h2>2. Data We Collect</h2>
+    <p>When you authenticate, the following information is collected and stored in a signed session cookie for up to 7 days:</p>
+    <ul>
+        <li><strong>Discord ID</strong> &mdash; your unique Discord account identifier</li>
+        <li><strong>Discord username</strong> and <strong>avatar hash</strong></li>
+        <li><strong>Roblox ID</strong> and <strong>Roblox username</strong> &mdash; retrieved via the RoWifi link</li>
+        <li><strong>Division rank</strong> and <strong>role name</strong> &mdash; fetched from the Roblox group API at login</li>
+        <li><strong>Login timestamp</strong> &mdash; used to enforce session freshness for security checks</li>
+    </ul>
+    <p>For users granted administrative access, your Discord ID is stored server-side in an admin allowlist to persist permissions between logins.</p>
+
+    <h2>3. How We Use Your Data</h2>
+    <p>Your data is used solely to:</p>
+    <ul>
+        <li>Verify you are a current member of the Nighthawk Commandos division</li>
+        <li>Determine which areas of the System you are authorised to access</li>
+        <li>Record an audit trail of administrative actions (admin users only)</li>
+        <li>Display your username and rank within the interface</li>
+    </ul>
+    <p>Your data is <strong>never</strong> sold, shared with third parties, or used for advertising purposes.</p>
+
+    <h2>4. Third-Party Services</h2>
+    <p>Authentication relies on the following external services:</p>
+    <ul>
+        <li><strong>Discord OAuth2</strong> &mdash; used to verify your identity. Subject to <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord&rsquo;s Privacy Policy</a>.</li>
+        <li><strong>RoWifi</strong> &mdash; used to look up your linked Roblox account. Subject to <a href="https://rowifi.xyz" target="_blank" rel="noopener">RoWifi&rsquo;s terms</a>.</li>
+        <li><strong>Roblox API</strong> &mdash; used to verify your group membership and rank. Subject to <a href="https://en.help.roblox.com/hc/en-us/articles/115004647846" target="_blank" rel="noopener">Roblox&rsquo;s Privacy Policy</a>.</li>
+        <li><strong>Netlify</strong> &mdash; the System is hosted on Netlify. Subject to <a href="https://www.netlify.com/privacy/" target="_blank" rel="noopener">Netlify&rsquo;s Privacy Policy</a>.</li>
+    </ul>
+
+    <h2>5. Data Retention</h2>
+    <ul>
+        <li><strong>Session cookies</strong> expire after 7 days and contain no persistent server-side state.</li>
+        <li><strong>Admin allowlist entries</strong> are retained until explicitly removed by a system administrator.</li>
+        <li><strong>Audit logs</strong> are retained for a maximum of 500 entries on a rolling basis.</li>
+        <li><strong>Error logs</strong> are retained for a maximum of 200 entries on a rolling basis.</li>
+    </ul>
+
+    <h2>6. Your Rights</h2>
+    <p>You may request removal of your data from the admin allowlist at any time by contacting a system administrator via the Nighthawk Commandos Discord server. Revoking access will not affect data held by Discord, Roblox, or RoWifi independently.</p>
+
+    <h2>7. Security</h2>
+    <p>Sessions are protected using HMAC-SHA256 signed cookies. All connections use HTTPS. We do not store passwords or Discord access tokens beyond the initial authentication exchange.</p>
+
+    <h2>8. Changes to This Policy</h2>
+    <p>This policy may be updated from time to time. Continued use of the System following any changes constitutes acceptance of the updated policy.</p>
+
+    <h2>9. Contact</h2>
+    <p>For privacy-related enquiries, please contact division leadership via the Nighthawk Commandos Discord server.</p>
+
+    <div class="footer">
+        The Nighthawk Imperium &mdash; Nighthawk Commandos Division
+        &nbsp;&middot;&nbsp;
+        <a href="/tos">Terms of Service</a>
+    </div>
+</div>
+</body>
+</html>

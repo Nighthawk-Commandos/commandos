@@ -49,7 +49,7 @@ function renderDISSection() {
                 hs.innerHTML = '<div class="bg-grid"></div>' +
                     '<aside class="obj-sidebar">' +
                     '  <div class="obj-sidebar-logo">' +
-                    '    <div class="obj-sidebar-label">TNI Commandos</div>' +
+                    '    <div class="obj-sidebar-label">Nighthawk Commandos</div>' +
                     '    <div class="obj-sidebar-title">Deployment<br>Incentive</div>' +
                     '  </div>' +
                     '  <div class="obj-sidebar-back"><button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Hub</button></div>' +
@@ -153,7 +153,7 @@ function _disPaint() {
         '<div class="bg-grid"></div>' +
         '<aside class="obj-sidebar" id="dis-sidebar">' +
         '  <div class="obj-sidebar-logo">' +
-        '    <div class="obj-sidebar-label">TNI Commandos \u2014 Week ' + wk + '</div>' +
+        '    <div class="obj-sidebar-label">Nighthawk Commandos \u2014 Week ' + wk + '</div>' +
         '    <div class="obj-sidebar-title">Deployment<br>Incentive</div>' +
         '  </div>' +
         '  <div class="obj-sidebar-back">' +
@@ -250,7 +250,7 @@ function _disSmartUpdateBoard() {
 
     // Update week number in sidebar label
     var label = document.querySelector('#dis-sidebar .obj-sidebar-label');
-    if (label && st.weekNumber) label.textContent = 'TNI Commandos \u2014 Week ' + st.weekNumber;
+    if (label && st.weekNumber) label.textContent = 'Nighthawk Commandos \u2014 Week ' + st.weekNumber;
 }
 
 // ── Board view ────────────────────────────────────────────────

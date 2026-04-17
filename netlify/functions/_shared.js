@@ -6,8 +6,8 @@ const { getStore } = require('@netlify/blobs');
 const crypto = require('crypto');
 
 // ── Discord webhook URLs ────────────────────────────────────────
-const DISCORD_ERROR_WEBHOOK = 'https://discord.com/api/webhooks/1493456420845256724/S6vuPNq3__hspScIJcq5VzNHuTPeygdPTevwIBs4ITapetxr9ZruOtook-64lFzpsqVF';
-const DISCORD_AUDIT_WEBHOOK = 'https://discord.com/api/webhooks/1493456423336808599/4c0cSSim6rGQcOmWD0e1lTuv9byXZ9EoSTC0wYEn3o5OdecPEr6_HFN15El8H7rcGdLA';
+const DISCORD_ERROR_WEBHOOK = process.env.DISCORD_ERROR_WEBHOOK_URL || '';
+const DISCORD_AUDIT_WEBHOOK = process.env.DISCORD_AUDIT_WEBHOOK_URL || '';
 
 // ── Blobs store factory ─────────────────────────────────────────
 function blobsStore(name) {

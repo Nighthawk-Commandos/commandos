@@ -3,41 +3,7 @@
 'use strict';
 
 const { getStore } = require('@netlify/blobs');
-const crypto = require('crypto');
-
-function verifySession(cookieHeader) {
-    if (!cookieHeader) return null;
-    const match = cookieHeader.match(/(?:^|;\s*)cmd_session=([^;]+)/);
-    if (!match) return null;
-    try {
-        const raw = decodeURIComponent(match[1]);
-        const lastDot = raw.lastIndexOf('.');
-        if (lastDot === -1) return null;
-        const payload64 = raw.slice(0, lastDot);
-        const sig = raw.slice(lastDot + 1);
-        const secret = process.env.SESSION_SECRET;
-        if (!secret) return null;
-        const expected = crypto.createHmac('sha256', secret).update(payload64).digest('hex');
-        if (sig.length !== expected.length) return null;
-        if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
-        const session = JSON.parse(Buffer.from(payload64, 'base64url').toString('utf8'));
-        if (Date.now() > session.exp * 1000) return null;
-        return session;
-    } catch { return null; }
-}
-
-function json(statusCode, body) {
-    return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
-function getCurrentWeekNumber() {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-    const day = start.getUTCDay() || 7;
-    if (day !== 4) start.setUTCDate(start.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(start.getUTCFullYear(), 0, 4));
-    return 1 + Math.round(((now.getTime() - yearStart.getTime()) / 86400000 - 3 + (yearStart.getUTCDay() + 6) % 7) / 7);
-}
+const { verifySession, json, getCurrentWeekNumber } = require('./_shared');
 
 exports.handler = async (event) => {
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
@@ -69,6 +35,9 @@ exports.handler = async (event) => {
         try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
         // events = [{username, eventType, date?}, ...]  (all events from mainframe)
+        if (Array.isArray(body.events) && body.events.length > 5000) {
+            return json(400, { error: 'events array too large (max 5000)' });
+        }
         const allEvents = Array.isArray(body.events) ? body.events : [];
         const myUsername = (session.robloxUsername || '').toLowerCase();
 

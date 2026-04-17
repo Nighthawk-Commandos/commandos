@@ -22,6 +22,9 @@ exports.handler = async (event) => {
     let body;
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
+    if (Array.isArray(body.events) && body.events.length > 500) {
+        return json(400, { error: 'events array too large (max 500)' });
+    }
     const events = Array.isArray(body.events) ? body.events : [];
     const store  = blobsStore('commandos-dis');
 
@@ -43,9 +46,9 @@ exports.handler = async (event) => {
 
     // Process each event row
     for (const ev of events) {
-        const username  = ev && typeof ev.username  === 'string' ? ev.username.trim()  : null;
-        const eventType = ev && typeof ev.eventType === 'string' ? ev.eventType.trim() : null;
-        const rawGameId = ev && ev.gameId ? String(ev.gameId).trim() : null;
+        const username  = ev && typeof ev.username  === 'string' ? ev.username.trim().slice(0, 50)  : null;
+        const eventType = ev && typeof ev.eventType === 'string' ? ev.eventType.trim().slice(0, 100) : null;
+        const rawGameId = ev && ev.gameId ? String(ev.gameId).trim().slice(0, 30) : null;
 
         if (!username || !eventType || !rawGameId) continue;
         if (username.toLowerCase() === 'officer') continue; // block invalid username

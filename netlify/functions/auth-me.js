@@ -11,8 +11,7 @@ function verifySession(token, secret) {
     const encoded = token.slice(0, dot);
     const hmac    = token.slice(dot + 1);
     const expected = crypto.createHmac('sha256', secret).update(encoded).digest('hex');
-    // Constant-time compare
-    if (expected.length !== hmac.length) return null;
+    if (!/^[0-9a-f]{64}$/.test(hmac)) return null;
     const eq = crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(hmac, 'hex'));
     if (!eq) return null;
     try {
