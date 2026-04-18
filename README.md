@@ -142,8 +142,8 @@ Set these in Netlify → Site Settings → Environment Variables:
 | `SCRIPT_URL` | Your Google Apps Script `/exec` deployment URL |
 | `NETLIFY_SITE_ID` | Your Netlify site ID (used for Blobs access) |
 | `NETLIFY_ACCESS_TOKEN` | Netlify personal access token (used for Blobs access) |
-| `DISCORD_ERROR_WEBHOOK` | Discord webhook URL for error notifications |
-| `DISCORD_AUDIT_WEBHOOK` | Discord webhook URL for admin audit embeds |
+| `DISCORD_ERROR_WEBHOOK_URL` | Discord webhook URL for error notifications |
+| `DISCORD_AUDIT_WEBHOOK_URL` | Discord webhook URL for admin audit embeds |
 | `CALLBACK_SECRET` | Shared secret between Netlify and Apps Script for callback auth |
 
 ### 2. Apps Script script properties
