@@ -1,8 +1,7 @@
 // ── POST /api/bingo/admin — admin actions: regenerate, reset-week
 'use strict';
 
-const { getStore } = require('@netlify/blobs');
-const { verifySession, requireAdmin, json, getCurrentWeekNumber } = require('./_shared');
+const { fireStore, verifySession, requireAdmin, json, getCurrentWeekNumber } = require('./_shared');
 
 const DEFAULT_EVENT_TYPES = [
     'Raid', 'Defence', 'Training', 'Patrol', 'Drill',
@@ -22,7 +21,7 @@ exports.handler = async (event) => {
     let body;
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
-    const bingoStore = getStore({ name: 'commandos-bingo', consistency: 'strong' });
+    const bingoStore = fireStore('commandos-bingo');
     const weekNumber = getCurrentWeekNumber();
 
     // ── Action: regenerate — create a new random board ──────────
@@ -51,7 +50,7 @@ exports.handler = async (event) => {
 
         const board = { tiles, weekNumber, updatedAt: new Date().toISOString(), updatedBy: session.robloxUsername || session.discordId };
         try {
-            await bingoStore.set('board', JSON.stringify(board));
+            await bingoStore.set('board', board);
             return json(200, { ok: true, weekNumber, tiles });
         } catch (e) {
             return json(500, { error: e.message });
@@ -61,7 +60,7 @@ exports.handler = async (event) => {
     // ── Action: reset-week — wipe all progress for current week ─
     if (body.action === 'reset-week') {
         try {
-            await bingoStore.set('progress-' + weekNumber, JSON.stringify({}));
+            await bingoStore.set('progress-' + weekNumber, {});
             return json(200, { ok: true, weekNumber, message: 'Progress reset for week ' + weekNumber });
         } catch (e) {
             return json(500, { error: e.message });

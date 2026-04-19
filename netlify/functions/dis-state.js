@@ -4,7 +4,7 @@
 //   2. Blobs state-cache (30s TTL) — only one cold read per 30s for CDN misses.
 'use strict';
 
-const { blobsStore, json, getCurrentWeekNumber } = require('./_shared');
+const { blobsStore, fireStore, json, getCurrentWeekNumber } = require('./_shared');
 
 // Adds CDN cache directives to the response so Netlify's global edge
 // can absorb concurrent traffic without hitting the function at all.
@@ -22,22 +22,23 @@ function stateJson(body) {
 exports.handler = async (event) => {
     if (event.httpMethod !== 'GET') return { statusCode: 405, body: 'Method Not Allowed' };
 
-    const store      = blobsStore('commandos-dis');
+    const cacheStore = blobsStore('commandos-dis');
+    const dataStore  = fireStore('commandos-dis');
     const weekNumber = getCurrentWeekNumber();
 
     // ── Blobs cache (CDN miss path) ───────────────────────────────
     try {
-        const cached = await store.get('state-cache', { type: 'json' });
+        const cached = await cacheStore.get('state-cache', { type: 'json' });
         if (cached && cached.weekNumber === weekNumber &&
             Date.now() - new Date(cached.cachedAt).getTime() < 30000) {
             return stateJson(cached.state);
         }
     } catch (_) {}
 
-    // ── Load fresh from Blobs ────────────────────────────────────
+    // ── Load fresh from Firebase ─────────────────────────────────
     const [board, users] = await Promise.all([
-        store.get('board', { type: 'json' }).catch(() => null),
-        store.get('users', { type: 'json' }).catch(() => ({}))
+        dataStore.get('board', { type: 'json' }).catch(() => null),
+        dataStore.get('users', { type: 'json' }).catch(() => ({}))
     ]);
 
     const tiles    = (board && board.tiles) ? board.tiles : [];
@@ -73,7 +74,7 @@ exports.handler = async (event) => {
     };
 
     // ── Save cache (non-blocking — don't add latency to the response) ──
-    store.set('state-cache', JSON.stringify({ state, weekNumber, cachedAt: new Date().toISOString() })).catch(() => {});
+    cacheStore.set('state-cache', JSON.stringify({ state, weekNumber, cachedAt: new Date().toISOString() })).catch(() => {});
 
     return stateJson(state);
 };

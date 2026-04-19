@@ -2,10 +2,10 @@
 // ── POST /api/dis/gamepool — save game pool (admin)
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, json, addAdminAudit, addErrorLog, sendAuditWebhook, sendErrorWebhook } = require('./_shared');
+const { fireStore, verifySession, getUserAdminPerms, json, addAdminAudit, addErrorLog, sendAuditWebhook, sendErrorWebhook } = require('./_shared');
 
 exports.handler = async (event) => {
-    const store = blobsStore('commandos-dis');
+    const store = fireStore('commandos-dis');
 
     if (event.httpMethod === 'GET') {
         const pool = await store.get('gamepool', { type: 'json' }).catch(() => []);
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'POST') {
         const session = verifySession(event.headers.cookie || event.headers.Cookie);
         if (!session) return json(401, { error: 'Unauthorized' });
-        const adminStore = blobsStore('commandos-admin');
+        const adminStore = fireStore('commandos-admin');
         const perms = await getUserAdminPerms(session, adminStore);
         if (!perms || !perms.disGamePool) return json(403, { error: 'Forbidden: requires disGamePool permission' });
 
@@ -50,7 +50,7 @@ exports.handler = async (event) => {
         const adminId = (session && (session.robloxUsername || session.discordId)) || 'unknown';
 
         try {
-            await store.set('gamepool', JSON.stringify(cleaned));
+            await store.set('gamepool', cleaned);
             await addAdminAudit(adminStore, adminId, 'GAMEPOOL_UPDATE', { count: cleaned.length });
             await sendAuditWebhook(adminId, 'GAMEPOOL_UPDATE', { count: cleaned.length });
             return json(200, { ok: true, count: cleaned.length });

@@ -2,11 +2,10 @@
 // ── PUT  /api/bingo/board  — admin: save board config
 'use strict';
 
-const { getStore } = require('@netlify/blobs');
-const { verifySession, requireAdmin, json, getCurrentWeekNumber } = require('./_shared');
+const { fireStore, verifySession, requireAdmin, json, getCurrentWeekNumber } = require('./_shared');
 
 exports.handler = async (event) => {
-    const store = getStore({ name: 'commandos-bingo', consistency: 'strong' });
+    const store = fireStore('commandos-bingo');
 
     // ── GET: public, no auth required ─────────────────────────
     if (event.httpMethod === 'GET') {
@@ -52,7 +51,7 @@ exports.handler = async (event) => {
         };
 
         try {
-            await store.set('board', JSON.stringify(board));
+            await store.set('board', board);
             return json(200, { ok: true, weekNumber });
         } catch (e) {
             return json(500, { error: e.message });

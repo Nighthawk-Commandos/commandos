@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
+const { fireStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
 
 // Clamp requested permissions to what the actor is allowed to grant.
 function sanitizePerms(requested, actorPerms) {
@@ -40,7 +40,7 @@ exports.handler = async function (event) {
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
     if (!session) return json(401, { error: 'not_authenticated' });
 
-    const store = blobsStore('commandos-admin');
+    const store = fireStore('commandos-admin');
     let list = [];
     try {
         const raw = await store.get('allowlist', { type: 'json' });
@@ -103,7 +103,7 @@ exports.handler = async function (event) {
 
         if (!list.some(e => e.discordId === entry.discordId)) {
             list.push(entry);
-            await store.set('allowlist', JSON.stringify(list));
+            await store.set('allowlist', list);
             const adminId = session.robloxUsername || session.discordId;
             await addAdminAudit(store, adminId, 'ALLOWLIST_ADD', { discordId: entry.discordId, label: entry.label, roleIds: entry.roleIds });
             await sendAuditWebhook(adminId, 'ALLOWLIST_ADD', { discordId: entry.discordId, label: entry.label, roleIds: entry.roleIds });
@@ -168,7 +168,7 @@ exports.handler = async function (event) {
             auditDetails.permissions = list[idx].permissions;
         }
 
-        await store.set('allowlist', JSON.stringify(list));
+        await store.set('allowlist', list);
         const adminId = session.robloxUsername || session.discordId;
         await addAdminAudit(store, adminId, 'ALLOWLIST_UPDATE', auditDetails);
         await sendAuditWebhook(adminId, 'ALLOWLIST_UPDATE', auditDetails);
@@ -192,7 +192,7 @@ exports.handler = async function (event) {
         }
 
         list = list.filter(e => e.discordId !== discordId);
-        await store.set('allowlist', JSON.stringify(list));
+        await store.set('allowlist', list);
         const adminId = session.robloxUsername || session.discordId;
         await addAdminAudit(store, adminId, 'ALLOWLIST_REMOVE', { discordId, label: target ? target.label : discordId });
         await sendAuditWebhook(adminId, 'ALLOWLIST_REMOVE', { discordId, label: target ? target.label : discordId });

@@ -4,6 +4,7 @@
 
 const { getStore } = require('@netlify/blobs');
 const crypto = require('crypto');
+const { fireStore } = require('./_firebase');
 
 // ── Discord webhook URLs ────────────────────────────────────────
 const DISCORD_ERROR_WEBHOOK = process.env.DISCORD_ERROR_WEBHOOK_URL || '';
@@ -61,7 +62,7 @@ async function requireAdmin(session) {
     // Rank-based gate: only valid for 24 h after login to prevent stale-rank bypass.
     if (session.divisionRank >= 246 && _isRankSessionFresh(session)) return null;
     try {
-        const allowlist = await blobsStore('commandos-admin').get('allowlist', { type: 'json' }) || [];
+        const allowlist = await fireStore('commandos-admin').get('allowlist', { type: 'json' }) || [];
         if (allowlist.some(e => e.discordId === session.discordId)) return null;
     } catch {}
     return json(403, { error: 'Forbidden' });
@@ -150,27 +151,30 @@ function getCurrentWeekNumber() {
 }
 
 // ── Blobs state-cache invalidation ─────────────────────────────
-async function invalidateCache(store) {
-    try { await store.set('state-cache', ''); } catch {}
+// Always writes to Netlify Blobs (cache only — data lives in Firebase).
+async function invalidateCache() {
+    try { await blobsStore('commandos-dis').set('state-cache', ''); } catch {}
 }
 
 // ── Admin audit log ─────────────────────────────────────────────
 // Appends an entry to commandos-admin/audit. Keeps last 500 entries.
-async function addAdminAudit(adminStore, adminId, action, details) {
+async function addAdminAudit(_unused, adminId, action, details) {
+    const store = fireStore('commandos-admin');
     let log;
-    try { log = await adminStore.get('audit', { type: 'json' }); } catch {}
+    try { log = await store.get('audit', { type: 'json' }); } catch {}
     log = Array.isArray(log) ? log : [];
     log.push({ adminId, action, details, timestamp: new Date().toISOString() });
     if (log.length > 500) log = log.slice(-500);
-    await adminStore.set('audit', JSON.stringify(log));
+    await store.set('audit', log);
 }
 
 // ── Error log ────────────────────────────────────────────────────
 // Appends an error entry to commandos-admin/error-log. Keeps last 200 entries.
 // Used for failures — successful actions go to audit log instead.
-async function addErrorLog(adminStore, action, error, details) {
+async function addErrorLog(_unused, action, error, details) {
+    const store = fireStore('commandos-admin');
     let log;
-    try { log = await adminStore.get('error-log', { type: 'json' }); } catch {}
+    try { log = await store.get('error-log', { type: 'json' }); } catch {}
     log = Array.isArray(log) ? log : [];
     log.push({
         action,
@@ -179,7 +183,7 @@ async function addErrorLog(adminStore, action, error, details) {
         timestamp: new Date().toISOString()
     });
     if (log.length > 200) log = log.slice(-200);
-    await adminStore.set('error-log', JSON.stringify(log));
+    await store.set('error-log', log);
 }
 
 // ── Discord webhook sender ──────────────────────────────────────
@@ -261,6 +265,7 @@ async function sendAuditWebhook(adminId, action, details) {
 
 module.exports = {
     blobsStore,
+    fireStore,
     verifySession,
     requireAdmin,
     getUserAdminPerms,

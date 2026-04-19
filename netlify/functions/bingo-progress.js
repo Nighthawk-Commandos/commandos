@@ -2,14 +2,13 @@
 // ── POST /api/bingo/progress  — sync: client sends event log rows, server updates tiles
 'use strict';
 
-const { getStore } = require('@netlify/blobs');
-const { verifySession, json, getCurrentWeekNumber } = require('./_shared');
+const { fireStore, verifySession, json, getCurrentWeekNumber } = require('./_shared');
 
 exports.handler = async (event) => {
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
     if (!session) return json(401, { error: 'Unauthorized' });
 
-    const bingoStore = getStore({ name: 'commandos-bingo', consistency: 'strong' });
+    const bingoStore = fireStore('commandos-bingo');
     const weekNumber = getCurrentWeekNumber();
     const progressKey = 'progress-' + weekNumber;
 
@@ -115,7 +114,7 @@ exports.handler = async (event) => {
         allProgress[session.discordId] = updated;
 
         try {
-            await bingoStore.set(progressKey, JSON.stringify(allProgress));
+            await bingoStore.set(progressKey, allProgress);
         } catch (e) {
             return json(500, { error: 'Failed to save progress: ' + e.message });
         }

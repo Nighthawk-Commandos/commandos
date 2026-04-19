@@ -3,7 +3,7 @@
 // each row: extract gameId + eventType, attempt to claim matching tile.
 'use strict';
 
-const { blobsStore, verifySession, requireAdmin, json } = require('./_shared');
+const { blobsStore, fireStore, verifySession, requireAdmin, json } = require('./_shared');
 
 // Extract first 5+ digit number from a string (Roblox game ID)
 function extractGameId(raw) {
@@ -26,7 +26,8 @@ exports.handler = async (event) => {
         return json(400, { error: 'events array too large (max 500)' });
     }
     const events = Array.isArray(body.events) ? body.events : [];
-    const store  = blobsStore('commandos-dis');
+    const store      = fireStore('commandos-dis');
+    const cacheStore = blobsStore('commandos-dis');
 
     // Load board and users
     let board, users;
@@ -120,10 +121,10 @@ exports.handler = async (event) => {
 
     // Persist all changes in one parallel batch
     await Promise.all([
-        store.set('board',       JSON.stringify(board)),
-        store.set('users',       JSON.stringify(users)),
-        store.set('audit',       JSON.stringify(auditLog)),
-        store.set('state-cache', '') // invalidate CDN + Blobs cache
+        store.set('board',            board),
+        store.set('users',            users),
+        store.set('audit',            auditLog),
+        cacheStore.set('state-cache', '')
     ]);
 
     return json(200, { ok: true, claimed, skipped, notFound, total: events.length });

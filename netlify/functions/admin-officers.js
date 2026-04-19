@@ -4,7 +4,7 @@
 //  Requires: mfOfficers permission
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, json, addAdminAudit, addErrorLog, sendAuditWebhook, sendErrorWebhook } = require('./_shared');
+const { fireStore, verifySession, getUserAdminPerms, json, addAdminAudit, addErrorLog, sendAuditWebhook, sendErrorWebhook } = require('./_shared');
 
 async function callAppsScript(fn, payload) {
     const scriptUrl = process.env.SCRIPT_URL;
@@ -35,7 +35,7 @@ exports.handler = async (event) => {
         const session = verifySession(event.headers.cookie || event.headers.Cookie);
         if (!session) return json(401, { error: 'Unauthorized' });
 
-        const adminStore = blobsStore('commandos-admin');
+        const adminStore = fireStore('commandos-admin');
         const perms = await getUserAdminPerms(session, adminStore).catch(() => null);
         if (!perms || (!perms.mfOfficers && !perms.superadmin)) {
             return json(403, { error: 'Forbidden: requires mfOfficers permission' });
@@ -100,7 +100,7 @@ exports.handler = async (event) => {
         // Top-level catch — logs the real error, never hides it
         console.error('[admin-officers] unhandled error:', err);
         sendErrorWebhook('Officer Admin Unhandled Error', err.message || String(err), {}).catch(() => {});
-        addErrorLog(blobsStore('commandos-admin'), 'OFFICER_UNHANDLED', err, {}).catch(() => {});
+        addErrorLog(null, 'OFFICER_UNHANDLED', err, {}).catch(() => {});
         return json(500, { error: err.message || 'Internal server error' });
     }
 };

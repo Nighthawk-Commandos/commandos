@@ -5,7 +5,7 @@
 //          advance-week, advance-month
 'use strict';
 
-const { blobsStore, verifySession, getUserAdminPerms, json, getCurrentWeekNumber, invalidateCache, addErrorLog, sendErrorWebhook, sendAuditWebhook } = require('./_shared');
+const { fireStore, verifySession, getUserAdminPerms, json, getCurrentWeekNumber, invalidateCache, addErrorLog, sendErrorWebhook, sendAuditWebhook } = require('./_shared');
 
 async function addAudit(store, adminId, action, details) {
     let log;
@@ -13,7 +13,7 @@ async function addAudit(store, adminId, action, details) {
     log = Array.isArray(log) ? log : [];
     log.push({ adminId, action, details, timestamp: new Date().toISOString() });
     if (log.length > 500) log = log.slice(-500);
-    await store.set('audit', JSON.stringify(log));
+    await store.set('audit', log);
 }
 
 // Permission required per action
@@ -43,7 +43,7 @@ exports.handler = async (event) => {
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
     // Check permission for this specific action
-    const adminStore = blobsStore('commandos-admin');
+    const adminStore = fireStore('commandos-admin');
     const perms = await getUserAdminPerms(session, adminStore);
     if (!perms) return json(403, { error: 'Forbidden' });
 
@@ -55,7 +55,7 @@ exports.handler = async (event) => {
         return json(403, { error: 'Forbidden: unknown action' });
     }
 
-    const store   = blobsStore('commandos-dis');
+    const store   = fireStore('commandos-dis');
     const adminId = session.robloxUsername || session.discordId;
 
     try {
@@ -99,7 +99,7 @@ async function _handleAction(body, store, adminId) {
                 const pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
                 users[prevUser].points      = Math.max(0, (users[prevUser].points || 0) - pts);
                 users[prevUser].claimedTiles = (users[prevUser].claimedTiles || []).filter(p => p !== pos);
-                await store.set('users', JSON.stringify(users));
+                await store.set('users', users);
             }
         }
 
@@ -108,9 +108,9 @@ async function _handleAction(body, store, adminId) {
         });
         board.updatedAt = new Date().toISOString();
 
-        await store.set('board', JSON.stringify(board));
+        await store.set('board', board);
         await addAudit(store, adminId, 'UNLOCK_TILE', { position: pos, prevUser });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'UNLOCK_TILE', { position: pos + 1, prevUser: prevUser || '—' });
         return json(200, { ok: true });
     }
@@ -126,9 +126,9 @@ async function _handleAction(body, store, adminId) {
         board.tiles[pos] = Object.assign({}, board.tiles[pos], { lockedByAdmin: true });
         board.updatedAt  = new Date().toISOString();
 
-        await store.set('board', JSON.stringify(board));
+        await store.set('board', board);
         await addAudit(store, adminId, 'LOCK_TILE', { position: pos });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'LOCK_TILE', { position: pos + 1 });
         return json(200, { ok: true });
     }
@@ -165,10 +165,10 @@ async function _handleAction(body, store, adminId) {
             (users[username].claimedTiles = users[username].claimedTiles || []).push(pos);
         }
 
-        await store.set('board', JSON.stringify(board));
-        await store.set('users', JSON.stringify(users));
+        await store.set('board', board);
+        await store.set('users', users);
         await addAudit(store, adminId, 'FORCE_CLAIM', { position: pos, username, points: pts });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'FORCE_CLAIM', { position: pos + 1, username, points: pts });
         return json(200, { ok: true });
     }
@@ -187,9 +187,9 @@ async function _handleAction(body, store, adminId) {
         if (!users[username]) users[username] = { points: 0, raffleEntries: 0, claimedTiles: [], history: [] };
         users[username].points = Math.max(0, (users[username].points || 0) + delta);
 
-        await store.set('users', JSON.stringify(users));
+        await store.set('users', users);
         await addAudit(store, adminId, 'ADJUST_POINTS', { username, delta, newTotal: users[username].points });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'ADJUST_POINTS', { username, delta, newTotal: users[username].points });
         return json(200, { ok: true, newPoints: users[username].points });
     }
@@ -208,9 +208,9 @@ async function _handleAction(body, store, adminId) {
         if (!users[username]) users[username] = { points: 0, raffleEntries: 0, claimedTiles: [], history: [] };
         users[username].raffleEntries = Math.max(0, (users[username].raffleEntries || 0) + delta);
 
-        await store.set('users', JSON.stringify(users));
+        await store.set('users', users);
         await addAudit(store, adminId, 'ADJUST_RAFFLE', { username, delta, newTotal: users[username].raffleEntries });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'ADJUST_RAFFLE', { username, delta, newTotal: users[username].raffleEntries });
         return json(200, { ok: true, newEntries: users[username].raffleEntries });
     }
@@ -229,9 +229,9 @@ async function _handleAction(body, store, adminId) {
         board.tiles[pos] = Object.assign({}, board.tiles[pos], { points: pts });
         board.updatedAt  = new Date().toISOString();
 
-        await store.set('board', JSON.stringify(board));
+        await store.set('board', board);
         await addAudit(store, adminId, 'SET_TILE_POINTS', { position: pos, prev, points: pts });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'SET_TILE_POINTS', { position: pos + 1, prev, points: pts });
         return json(200, { ok: true });
     }
@@ -251,9 +251,9 @@ async function _handleAction(body, store, adminId) {
         board.tiles[pos] = Object.assign({}, board.tiles[pos], { eventType });
         board.updatedAt  = new Date().toISOString();
 
-        await store.set('board', JSON.stringify(board));
+        await store.set('board', board);
         await addAudit(store, adminId, 'SET_TILE_EVENTTYPE', { position: pos, prev, eventType });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'SET_TILE_EVENTTYPE', { position: pos + 1, prev, eventType });
         return json(200, { ok: true });
     }
@@ -268,9 +268,9 @@ async function _handleAction(body, store, adminId) {
         board.globalMultiplier = val;
         board.updatedAt        = new Date().toISOString();
 
-        await store.set('board', JSON.stringify(board));
+        await store.set('board', board);
         await addAudit(store, adminId, 'SET_MULTIPLIER', { globalMultiplier: val });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'SET_MULTIPLIER', { globalMultiplier: val });
         return json(200, { ok: true, globalMultiplier: val });
     }
@@ -287,9 +287,9 @@ async function _handleAction(body, store, adminId) {
         }
 
         await Promise.all([
-            store.set('users', JSON.stringify({})),
-            board ? store.set('board', JSON.stringify(board)) : Promise.resolve(),
-            invalidateCache(store)
+            store.set('users', {}),
+            board ? store.set('board', board) : Promise.resolve(),
+            invalidateCache()
         ]);
         await addAudit(store, adminId, 'RESET_WEEK', { weekNumber: getCurrentWeekNumber() });
         await sendAuditWebhook(adminId, 'RESET_WEEK', { weekNumber: getCurrentWeekNumber() });
@@ -356,10 +356,10 @@ async function _handleAction(body, store, adminId) {
         }
 
         await Promise.all([
-            store.set('users',        JSON.stringify(users)),
-            board ? store.set('board', JSON.stringify(board)) : Promise.resolve(),
-            store.set('week-history', JSON.stringify(weekHistory)),
-            invalidateCache(store)
+            store.set('users',        users),
+            board ? store.set('board', board) : Promise.resolve(),
+            store.set('week-history', weekHistory),
+            invalidateCache()
         ]);
 
         const auditDetails = {
@@ -421,10 +421,10 @@ async function _handleAction(body, store, adminId) {
         }
 
         await Promise.all([
-            store.set('users',   JSON.stringify(emptyUsers)),
-            store.set('alltime', JSON.stringify(alltime)),
-            board ? store.set('board', JSON.stringify(board)) : Promise.resolve(),
-            invalidateCache(store)
+            store.set('users',   emptyUsers),
+            store.set('alltime', alltime),
+            board ? store.set('board', board) : Promise.resolve(),
+            invalidateCache()
         ]);
 
         const auditDetails = {
@@ -481,9 +481,9 @@ async function _handleAction(body, store, adminId) {
             lastSyncAt: null
         };
 
-        await store.set('board', JSON.stringify(board));
+        await store.set('board', board);
         await addAudit(store, adminId, 'REGENERATE_BOARD', { weekNumber, tiles: tiles.length });
-        await invalidateCache(store);
+        await invalidateCache();
         await sendAuditWebhook(adminId, 'REGENERATE_BOARD', { weekNumber, tiles: tiles.length });
         return json(200, { ok: true, weekNumber, tiles: tiles.length });
     }
