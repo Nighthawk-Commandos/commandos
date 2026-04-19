@@ -1,9 +1,10 @@
 /node_modules
+/dist
 /Officer-Bingo
 .env
-# Local Netlify folder
 /.netlify
 deno.lock
 appscript_code.js
 /.vscode
-/.idea
+/.idea/
+/.trunk

@@ -34,7 +34,11 @@ async function exchangeCode(code, clientId, clientSecret, redirectUri) {
             redirect_uri:  redirectUri
         }).toString()
     });
-    if (!res.ok) throw new Error('discord_token_error');
+    if (!res.ok) {
+        const errBody = await res.text().catch(() => '(unreadable)');
+        console.error('[auth-callback] Discord token exchange failed:', res.status, errBody);
+        throw new Error('discord_token_error');
+    }
     return res.json();
 }
 

@@ -2,10 +2,11 @@
 //  dis.js — Deployment Incentive System
 //  Sidebar layout matching Division Objectives + Mainframe.
 //  Views: board | lb | raffle
-//  Admin views delegated to render.js _adminRenderDisTab
+//  Admin views live here alongside the state they need.
 // ═══════════════════════════════════════════════════════════════
 
-'use strict';
+import { AUTH } from './auth.js';
+import { esc, toast, btnBusy, btnDone } from './utils.js';
 
 // ── Module state ──────────────────────────────────────────────
 var _DIS = {
@@ -14,15 +15,15 @@ var _DIS = {
     gamepool:  null,
     view:      'board',
     poll:      null,
-    loading:   false
+    loading:   false,
+    adminTab:  null   // tracks current admin tab for refresh
 };
 
 // ── Entry point ───────────────────────────────────────────────
-function renderDISSection() {
-    _DIS.view     = 'board';
+export function renderDISSection() {
+    _DIS.view      = 'board';
     _DIS.stateHash = null;
 
-    // Show global loading overlay while fetching initial state
     var ls = document.getElementById('loading-status');
     if (ls) ls.textContent = 'Loading deployment data\u2026';
     document.getElementById('loading').classList.remove('hidden');
@@ -61,8 +62,7 @@ function renderDISSection() {
         });
 }
 
-// Called when leaving the DIS section
-function disLeave() {
+export function disLeave() {
     _disStopPoll();
     _disStopVisibilityWatch();
 }
@@ -134,7 +134,7 @@ function _disPaint() {
     if (!hs) return;
     var wk = (_DIS.state && _DIS.state.weekNumber) ? _DIS.state.weekNumber : _disWeek();
 
-    var isAdmin = window.AUTH && typeof window.AUTH.canAdminAny === 'function' && window.AUTH.canAdminAny();
+    var isAdmin = AUTH.canAdminAny();
 
     var navItems = [
         { key: 'board',  label: 'Grid' },
@@ -176,8 +176,6 @@ function _disPaint() {
 function _disUpdateNavActive() {
     document.querySelectorAll('#dis-nav .obj-nav-item').forEach(function (el) {
         el.classList.toggle('active', el.dataset.disview === _DIS.view);
-        var dot = el.querySelector('.obj-nav-dot');
-        if (dot) dot.style.background = el.classList.contains('active') ? '' : '';
     });
 }
 
@@ -248,7 +246,6 @@ function _disSmartUpdateBoard() {
         }
     });
 
-    // Update week number in sidebar label
     var label = document.querySelector('#dis-sidebar .obj-sidebar-label');
     if (label && st.weekNumber) label.textContent = 'Nighthawk Commandos \u2014 Week ' + st.weekNumber;
 }
@@ -286,13 +283,15 @@ function _disRenderBoard() {
     } else {
         tiles.forEach(function (tile) {
             var cls = 'dis-tile';
-            if (tile.completed)    cls += ' dis-tile-claimed';
+            if (tile.completed)      cls += ' dis-tile-claimed';
             else if (tile.lockedByAdmin) cls += ' dis-tile-locked';
 
             var pts = (tile.points || 1) * (tile.multiplier || 1) * gm;
+            var gameAttr = (tile.gameId && !tile.completed && !tile.lockedByAdmin)
+                ? ' data-click="openGame" data-game-id="' + esc(String(tile.gameId)) + '"'
+                : '';
 
-            html += '<div class="' + cls + '"' +
-                (tile.gameId && !tile.completed && !tile.lockedByAdmin ? ' onclick="window.open(\'https://www.roblox.com/games/' + tile.gameId + '\',\'_blank\')"' : '') + '>' +
+            html += '<div class="' + cls + '"' + gameAttr + '>' +
                 '<div class="dis-tile-type">' + esc(tile.eventType) + '</div>' +
                 '<div class="dis-tile-game">' + esc(tile.gameName || (tile.gameId ? 'Game ' + tile.gameId : '?')) + '</div>';
 
@@ -375,13 +374,55 @@ function _disRenderRaffle() {
 
     html += '</tbody></table></div>';
 
-    var isAdmin = window.AUTH && window.AUTH.canAccessAdmin && window.AUTH.canAccessAdmin();
-    if (isAdmin) {
+    if (AUTH.canAccessAdmin()) {
         html += '<button class="btn-dis-primary" id="dis-raffle-btn" data-click="disRunRaffle">Run Raffle</button>' +
             '<div id="dis-raffle-result" style="margin-top:20px"></div>';
     }
 
     body.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Admin tab rendering — lives here alongside _DIS state
+// ═══════════════════════════════════════════════════════════════
+
+// Entry point called by render.js's _adminRenderTab
+export function adminRenderDisTab(tabKey, body) {
+    _DIS.adminTab = tabKey;
+    if (!_DIS.state) {
+        body.innerHTML = '<div class="obj-loading">Loading DIS state\u2026</div>';
+        fetch('/api/dis/state')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                _DIS.state = data;
+                _adminRenderDisTabContent(tabKey, body);
+            })
+            .catch(function (e) {
+                body.innerHTML = '<div class="obj-error">Failed to load DIS state: ' + esc(e.message) + '</div>';
+            });
+        return;
+    }
+    _adminRenderDisTabContent(tabKey, body);
+}
+
+function _adminRenderDisTabContent(tabKey, body) {
+    if (tabKey === 'sync')          _disAdminSync(body);
+    else if (tabKey === 'tiles')    _disAdminTiles(body);
+    else if (tabKey === 'points')   _disAdminPoints(body);
+    else if (tabKey === 'raffle')   _disAdminRaffle(body);
+    else if (tabKey === 'gamepool') _disAdminGamePool(body);
+    else if (tabKey === 'audit')    _disAdminAudit(body);
+}
+
+function _adminRefreshDisTab() {
+    var body = document.getElementById('admin-body');
+    if (!body || !_DIS.adminTab) return;
+    fetch('/api/dis/state')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            _DIS.state = data;
+            _adminRenderDisTabContent(_DIS.adminTab, body);
+        });
 }
 
 // ── Admin: Sync tab ────────────────────────────────────────────
@@ -394,7 +435,7 @@ function _disAdminSync(body) {
         (st.lastSyncAt ? '<p class="admin-desc">Last sync: ' + new Date(st.lastSyncAt).toLocaleString() + '</p>' : '') +
         '</div>' +
         '<div class="dis-admin-actions">' +
-        '<button class="btn-dis-primary" id="dis-sync-btn" onclick="disTriggerSync()">Sync Now</button>' +
+        '<button class="btn-dis-primary" id="dis-sync-btn" data-click="disTriggerSync">Sync Now</button>' +
         '</div>' +
         '<div id="dis-sync-result" style="margin-top:16px"></div>' +
         '<hr style="border-color:var(--border);margin:24px 0">' +
@@ -403,14 +444,14 @@ function _disAdminSync(body) {
         '<p class="admin-desc">Multiplies the base points for all unclaimed tiles.</p>' +
         '<div style="display:flex;gap:8px;align-items:center;margin-top:12px">' +
         '<input id="dis-mult-input" class="admin-input" type="number" min="1" max="10" step="0.5" value="' + (st.globalMultiplier || 1) + '" style="width:100px">' +
-        '<button class="btn-dis-primary" onclick="disSetGlobalMultiplier()">Set Multiplier</button>' +
+        '<button class="btn-dis-primary" data-click="disSetGlobalMultiplier">Set Multiplier</button>' +
         '</div></div>' +
         '<hr style="border-color:var(--border);margin:24px 0">' +
         '<div class="info-block">' +
         '<h3>Week Control</h3>' +
         '<p class="admin-desc">Advance to next week: awards +1 raffle ticket to top 5 officers by tiles, then resets the board for a new week. Points and raffle entries carry forward through the month.</p>' +
         '<div class="dis-admin-actions" style="margin-top:12px">' +
-        '<button class="btn-dis-primary" style="background:rgba(124,74,184,.2)" onclick="disAdvanceWeek()">Advance to Next Week</button>' +
+        '<button class="btn-dis-primary" style="background:rgba(124,74,184,.2)" data-click="disAdvanceWeek">Advance to Next Week</button>' +
         '</div>' +
         '<div id="dis-advance-week-result" style="margin-top:12px"></div>' +
         '</div>' +
@@ -419,7 +460,7 @@ function _disAdminSync(body) {
         '<h3>Month Control</h3>' +
         '<p class="admin-desc">Advance to next month: archives all-time stats, then resets all points, tiles, and raffle entries.</p>' +
         '<div class="dis-admin-actions" style="margin-top:12px">' +
-        '<button class="btn-ghost" style="font-size:11px;color:var(--red);border-color:rgba(224,82,82,.3)" onclick="disAdvanceMonth()">Advance to Next Month</button>' +
+        '<button class="btn-ghost" style="font-size:11px;color:var(--red);border-color:rgba(224,82,82,.3)" data-click="disAdvanceMonth">Advance to Next Month</button>' +
         '</div>' +
         '<div id="dis-advance-month-result" style="margin-top:12px"></div>' +
         '</div>';
@@ -428,15 +469,14 @@ function _disAdminSync(body) {
 // ── Admin: Tiles tab ───────────────────────────────────────────
 function _disAdminTiles(body) {
     var tiles = (_DIS.state && _DIS.state.tiles) ? _DIS.state.tiles : [];
-    var gm = (_DIS.state && _DIS.state.globalMultiplier) || 1;
 
     var html =
         '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Tile Moderation</h3>' +
         '<p class="admin-desc">Unlock, lock, or force-assign individual tiles. You can also set per-tile multipliers.</p>' +
         '<div class="dis-admin-actions" style="margin-top:12px">' +
-        '<button class="btn-ghost" style="font-size:11px;color:var(--red);border-color:rgba(224,82,82,.3)" onclick="disResetWeek()">Reset All Progress</button>' +
-        '<button class="btn-dis-primary" onclick="disRegenerateBoard()">Regenerate Board</button>' +
+        '<button class="btn-ghost" style="font-size:11px;color:var(--red);border-color:rgba(224,82,82,.3)" data-click="disResetWeek">Reset All Progress</button>' +
+        '<button class="btn-dis-primary" data-click="disRegenerateBoard">Regenerate Board</button>' +
         '</div></div>';
 
     if (tiles.length === 0) {
@@ -459,27 +499,27 @@ function _disAdminTiles(body) {
             '<td>' + (pos + 1) + '</td>' +
             '<td style="white-space:nowrap">' +
             '<input id="dis-tet-' + pos + '" class="admin-input" value="' + esc(tile.eventType || '') + '" style="width:110px;padding:2px 4px;height:26px;font-size:12px"> ' +
-            '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" onclick="disSetTileEventType(' + pos + ')">Set</button>' +
+            '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" data-click="disSetTileEventType" data-pos="' + pos + '">Set</button>' +
             '</td>' +
             '<td style="max-width:120px;white-space:normal">' + esc(tile.gameName || tile.gameId || '?') + '</td>' +
             '<td><span class="badge ' + statusCls + '">' + status + '</span></td>' +
             '<td>' + (tile.completedBy ? esc(tile.completedBy) : '<span style="color:var(--muted)">—</span>') + '</td>' +
             '<td style="white-space:nowrap">' +
             '<input id="dis-tp-' + pos + '" class="admin-input" type="number" min="1" value="' + basePts + '" style="width:52px;padding:2px 4px;height:26px;font-size:12px"> ' +
-            '<button class="admin-remove-btn" style="border-color:rgba(120,90,200,.3);color:#a580e0" onclick="disSetTilePoints(' + pos + ')">Set</button>' +
+            '<button class="admin-remove-btn" style="border-color:rgba(120,90,200,.3);color:#a580e0" data-click="disSetTilePoints" data-pos="' + pos + '">Set</button>' +
             '</td>' +
             '<td style="text-align:right;white-space:nowrap">';
 
         if (tile.completed) {
-            html += '<button class="admin-remove-btn" onclick="disUnlockTile(' + pos + ')">Unlock</button> ';
+            html += '<button class="admin-remove-btn" data-click="disUnlockTile" data-pos="' + pos + '">Unlock</button> ';
         }
         if (!tile.lockedByAdmin && !tile.completed) {
-            html += '<button class="admin-remove-btn" style="border-color:rgba(200,164,74,.3);color:var(--accent)" onclick="disLockTile(' + pos + ')">Lock</button> ';
+            html += '<button class="admin-remove-btn" style="border-color:rgba(200,164,74,.3);color:var(--accent)" data-click="disLockTile" data-pos="' + pos + '">Lock</button> ';
         }
         if (tile.lockedByAdmin) {
-            html += '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" onclick="disUnlockTile(' + pos + ')">Unlock</button> ';
+            html += '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" data-click="disUnlockTile" data-pos="' + pos + '">Unlock</button> ';
         }
-        html += '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" onclick="disForceClaim(' + pos + ')">Force Claim</button>';
+        html += '<button class="admin-remove-btn" style="border-color:rgba(74,127,200,.3);color:var(--blue)" data-click="disForceClaim" data-pos="' + pos + '">Force Claim</button>';
         html += '</td></tr>';
     });
 
@@ -499,7 +539,7 @@ function _disAdminPoints(body) {
     html += '<div class="dis-inline-form" style="margin-bottom:24px">' +
         '<input id="dis-pts-user" class="admin-input" placeholder="Roblox username" style="flex:1">' +
         '<input id="dis-pts-amt" class="admin-input" type="number" placeholder="Points delta" style="width:130px">' +
-        '<button class="btn-dis-primary" onclick="disAdjustPoints()">Adjust Points</button>' +
+        '<button class="btn-dis-primary" data-click="disAdjustPoints">Adjust Points</button>' +
         '</div>';
 
     if (lb.length > 0) {
@@ -531,11 +571,11 @@ function _disAdminRaffle(body) {
     html += '<div class="dis-inline-form" style="margin-bottom:24px">' +
         '<input id="dis-rfl-user" class="admin-input" placeholder="Roblox username" style="flex:1">' +
         '<input id="dis-rfl-amt" class="admin-input" type="number" placeholder="Entries delta" style="width:130px">' +
-        '<button class="btn-dis-primary" onclick="disAdjustRaffle()">Adjust Entries</button>' +
+        '<button class="btn-dis-primary" data-click="disAdjustRaffle">Adjust Entries</button>' +
         '</div>';
 
     html += '<div style="margin-bottom:24px">' +
-        '<button class="btn-dis-primary" style="font-size:13px;padding:12px 28px" id="dis-raffle-run-btn" onclick="disRunRaffle()">Run Weighted Raffle</button>' +
+        '<button class="btn-dis-primary" style="font-size:13px;padding:12px 28px" id="dis-raffle-run-btn" data-click="disRunRaffle">Run Weighted Raffle</button>' +
         '</div>' +
         '<div id="dis-raffle-result"></div>';
 
@@ -582,7 +622,7 @@ function _disRenderGamePool(body) {
         '<input id="dis-gp-id" class="admin-input" placeholder="Game ID (e.g. 1234567890)" style="width:180px">' +
         '<input id="dis-gp-name" class="admin-input" placeholder="Display name" style="flex:1">' +
         '<input id="dis-gp-types" class="admin-input" placeholder="Event types (comma-separated)" style="flex:2">' +
-        '<button class="btn-dis-primary" onclick="disAddGame()">Add</button>' +
+        '<button class="btn-dis-primary" data-click="disAddGame">Add</button>' +
         '</div></div>';
 
     if (pool.length === 0) {
@@ -596,8 +636,8 @@ function _disRenderGamePool(body) {
                 '<td><input id="dis-gp-edit-name-' + i + '" class="admin-input" value="' + esc(g.name || '') + '" style="width:130px;padding:2px 4px;height:26px;font-size:12px"></td>' +
                 '<td><input id="dis-gp-edit-types-' + i + '" class="admin-input" value="' + esc((g.eventTypes || []).join(', ')) + '" style="width:220px;padding:2px 4px;height:26px;font-size:12px"></td>' +
                 '<td style="text-align:right;white-space:nowrap">' +
-                '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" onclick="disEditGame(' + i + ')">Save</button> ' +
-                '<button class="admin-remove-btn" onclick="disRemoveGame(' + i + ')">Remove</button>' +
+                '<button class="admin-remove-btn" style="border-color:rgba(74,156,114,.3);color:var(--green)" data-click="disEditGame" data-idx="' + i + '">Save</button> ' +
+                '<button class="admin-remove-btn" data-click="disRemoveGame" data-idx="' + i + '">Remove</button>' +
                 '</td>' +
                 '</tr>';
         });
@@ -652,7 +692,7 @@ function _disAdminAudit(body) {
 }
 
 // ── Action: Advance week ───────────────────────────────────────
-function disAdvanceWeek() {
+export function disAdvanceWeek() {
     if (!confirm('Advance to next week?\n\nThis will:\n• Award +1 raffle ticket to the top 5 officers by tiles\n• Reset all tile claims for the new week\n• Keep current points and raffle entries\n\nCannot be undone.')) return;
 
     var btn    = document.getElementById('dis-advance-week-btn');
@@ -685,7 +725,7 @@ function disAdvanceWeek() {
 }
 
 // ── Action: Advance month ──────────────────────────────────────
-function disAdvanceMonth() {
+export function disAdvanceMonth() {
     if (!confirm('Advance to next month?\n\nThis will:\n• Archive this month\'s stats to the all-time leaderboard\n• Reset ALL points, tiles, and raffle entries\n• Reset week counter to 1\n\nThis CANNOT be undone.')) return;
 
     var result = document.getElementById('dis-advance-month-result');
@@ -710,16 +750,16 @@ function disAdvanceMonth() {
 }
 
 // ── Action: Trigger sync ───────────────────────────────────────
-function disTriggerSync() {
+export function disTriggerSync() {
     var btn = document.getElementById('dis-sync-btn');
     var result = document.getElementById('dis-sync-result');
     if (btn) { btn.disabled = true; btn.textContent = 'Fetching events\u2026'; }
 
-    var url = window.SCRIPT_URL;
-    if (!url) { toast('SCRIPT_URL not configured', 'error'); return; }
-
-    fetch(url + '?action=api&fn=getDeploymentEvents', { cache: 'no-store' })
-        .then(function (r) { return r.json(); })
+    fetch('/api/mainframe/query?fn=getDeploymentEvents', { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(function (json) {
             var events = (json && json.events) ? json.events : [];
             if (events.length === 0) {
@@ -759,23 +799,23 @@ function disTriggerSync() {
 }
 
 // ── Unlock / lock tile ─────────────────────────────────────────
-function disUnlockTile(pos) { _disAdminAction({ action: 'unlock-tile', position: pos }, 'Tile unlocked'); }
-function disLockTile(pos)   { _disAdminAction({ action: 'lock-tile',   position: pos }, 'Tile locked');   }
+export function disUnlockTile(pos) { _disAdminAction({ action: 'unlock-tile', position: pos }, 'Tile unlocked'); }
+export function disLockTile(pos)   { _disAdminAction({ action: 'lock-tile',   position: pos }, 'Tile locked');   }
 
-function disForceClaim(pos) {
+export function disForceClaim(pos) {
     var user = prompt('Roblox username to assign tile ' + (pos + 1) + ' to:');
     if (!user || !user.trim()) return;
     _disAdminAction({ action: 'force-claim', position: pos, username: user.trim() }, 'Tile assigned to ' + user.trim());
 }
 
-function disSetTilePoints(pos) {
+export function disSetTilePoints(pos) {
     var inp = document.getElementById('dis-tp-' + pos);
     var val = inp ? parseInt(inp.value, 10) : NaN;
     if (isNaN(val) || val < 1) { toast('Points must be a positive integer', 'error'); return; }
     _disAdminAction({ action: 'set-tile-points', position: pos, points: val }, 'Tile ' + (pos + 1) + ' set to ' + val + ' pt' + (val !== 1 ? 's' : ''));
 }
 
-function disSetTileEventType(pos) {
+export function disSetTileEventType(pos) {
     var input = document.getElementById('dis-tet-' + pos);
     if (!input) return;
     var eventType = input.value.trim();
@@ -784,7 +824,7 @@ function disSetTileEventType(pos) {
 }
 
 // ── Points / raffle adjustments ────────────────────────────────
-function disAdjustPoints() {
+export function disAdjustPoints() {
     var user = document.getElementById('dis-pts-user');
     var amt  = document.getElementById('dis-pts-amt');
     if (!user || !amt || !user.value.trim() || !amt.value) { toast('Enter username and amount', 'error'); return; }
@@ -792,7 +832,7 @@ function disAdjustPoints() {
     user.value = ''; amt.value = '';
 }
 
-function disAdjustRaffle() {
+export function disAdjustRaffle() {
     var user = document.getElementById('dis-rfl-user');
     var amt  = document.getElementById('dis-rfl-amt');
     if (!user || !amt || !user.value.trim() || !amt.value) { toast('Enter username and amount', 'error'); return; }
@@ -800,25 +840,25 @@ function disAdjustRaffle() {
     user.value = ''; amt.value = '';
 }
 
-function disSetGlobalMultiplier() {
+export function disSetGlobalMultiplier() {
     var inp = document.getElementById('dis-mult-input');
     var val = inp ? parseFloat(inp.value) : NaN;
     if (isNaN(val) || val < 0.5) { toast('Enter a valid multiplier (\u2265 0.5)', 'error'); return; }
     _disAdminAction({ action: 'set-multiplier', value: val }, 'Global multiplier set to ' + val + 'x');
 }
 
-function disResetWeek() {
+export function disResetWeek() {
     if (!confirm('This will clear ALL tile claims and user progress for the current week. Cannot be undone. Continue?')) return;
     _disAdminAction({ action: 'reset-week' }, 'Week progress reset');
 }
 
-function disRegenerateBoard() {
+export function disRegenerateBoard() {
     if (!confirm('Generate a new random board from the game pool? Current tiles will be replaced.')) return;
     _disAdminAction({ action: 'regenerate-board' }, 'Board regenerated');
 }
 
 // ── Run weighted raffle ────────────────────────────────────────
-function disRunRaffle() {
+export function disRunRaffle() {
     var btn = document.getElementById('dis-raffle-run-btn') || document.getElementById('dis-raffle-btn');
     var resultEl = document.getElementById('dis-raffle-result');
     if (btn) btn.disabled = true;
@@ -860,7 +900,7 @@ function disRunRaffle() {
 }
 
 // ── Game pool actions ──────────────────────────────────────────
-function disAddGame() {
+export function disAddGame() {
     var id    = document.getElementById('dis-gp-id');
     var name  = document.getElementById('dis-gp-name');
     var types = document.getElementById('dis-gp-types');
@@ -871,7 +911,7 @@ function disAddGame() {
     _disSaveGamePool(pool);
 }
 
-function disEditGame(idx) {
+export function disEditGame(idx) {
     var nameEl  = document.getElementById('dis-gp-edit-name-'  + idx);
     var typesEl = document.getElementById('dis-gp-edit-types-' + idx);
     var pool    = (_DIS.gamepool || []).slice();
@@ -885,7 +925,7 @@ function disEditGame(idx) {
     _disSaveGamePool(pool);
 }
 
-function disRemoveGame(idx) {
+export function disRemoveGame(idx) {
     if (!confirm('Remove this game from the pool?')) return;
     var pool = (_DIS.gamepool || []).slice();
     pool.splice(idx, 1);
@@ -920,15 +960,13 @@ function _disAdminAction(payload, successMsg) {
         .then(function (res) {
             if (res.error) throw new Error(res.error);
             toast(successMsg, 'success');
-            if (typeof _adminRefreshDisTab === 'function') {
-                setTimeout(_adminRefreshDisTab, 300);
-            }
+            setTimeout(_adminRefreshDisTab, 300);
         })
         .catch(function (e) { toast('Action failed: ' + e.message, 'error'); });
 }
 
 // ── Nav handler ────────────────────────────────────────────────
-function disNavGo(el) {
+export function disNavGo(el) {
     var view = el && el.dataset ? el.dataset.disview : el;
     if (!view) return;
     _DIS.view = view;

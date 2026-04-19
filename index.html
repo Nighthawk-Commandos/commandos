@@ -123,15 +123,33 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- Load order matters: config → api → auth → render → forms → dis → objectives → app -->
-<script src="./js/config.js?v=7"></script>
-<script src="./js/api.js?v=7"></script>
-<script src="./js/auth.js?v=7"></script>
-<script src="./js/render.js?v=7"></script>
-<script src="./js/forms.js?v=7"></script>
-<script src="./js/dis.js?v=7"></script>
-<script src="./js/objectives.js?v=7"></script>
-<script src="./js/app.js?v=7"></script>
+<!-- Auth-gate: application scripts are only loaded after the session is
+     verified server-side. Unauthenticated visitors never receive any
+     application code, API endpoint paths, or cached data.
+     async=false keeps parallel downloads with guaranteed execution order. -->
+<script>
+(function () {
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (user) {
+            if (!user || user.authenticated === false) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('login-screen').classList.remove('hidden');
+                return;
+            }
+            // Pass pre-fetched session — captured and deleted immediately by app.js initAuth()
+            window._BOOT_SESSION = user;
+            var el = document.createElement('script');
+            el.type = 'module';
+            el.src  = './dist/app.min.js';
+            document.head.appendChild(el);
+        })
+        .catch(function () {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+        });
+})();
+</script>
 
 <script>
 // ── Login screen error display + login button wiring ─────────
@@ -144,9 +162,7 @@
         auth_failed:       'Authentication failed. Please try again.',
         unauthorized:      'You are not authorised to access this system.'
     };
-    var search   = window.location.search;
-    var params   = new URLSearchParams(search);
-    var errorKey = params.get('error');
+    var errorKey = new URLSearchParams(location.search).get('error');
     if (errorKey) {
         var errEl  = document.getElementById('login-error');
         var msgEl  = document.getElementById('login-error-msg');
@@ -156,12 +172,11 @@
             errEl.classList.remove('hidden');
             if (errorKey === 'rowifi_not_linked' && hintEl) hintEl.classList.remove('hidden');
         }
-        // Clean URL
-        history.replaceState(null, '', window.location.pathname);
+        history.replaceState(null, '', location.pathname);
     }
     var loginBtn = document.getElementById('login-btn');
     if (loginBtn) loginBtn.addEventListener('click', function () {
-        window.location.href = '/api/auth/discord';
+        location.href = '/api/auth/discord';
     });
 
 })();

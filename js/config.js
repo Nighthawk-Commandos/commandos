@@ -1,13 +1,13 @@
 // ═══════════════════════════════════════════════════════════════
 //  config.js
-//  Set your Apps Script deployment URL here.
-//  Add this file to .gitignore so the URL isn't public.
-//  On Netlify, inject this via an Environment Variable instead:
-//    SCRIPT_URL = https://script.google.com/macros/s/ABC.../exec
-//  and use a Netlify build plugin or edge function to inject it,
-//  OR simply set it here if your repo is private.
+//
+//  SCRIPT_URL and OBJECTIVES_URL have been moved to server-side
+//  Netlify environment variables. They are no longer exposed to
+//  the client. All Apps Script calls are now proxied through
+//  auth-gated Netlify functions:
+//
+//    GET  /api/mainframe/data      — main spreadsheet data
+//    GET  /api/mainframe/query     — read-only queries
+//    POST /api/mainframe/submit    — mutations (form submissions)
+//    GET  /api/objectives/data     — division objectives
 // ═══════════════════════════════════════════════════════════════
-
-window.SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxoE_N0kDDIPmScmttFSZnn7qw9__xF4Padlr5dgrOsPTefMAo_GK__kCphzmJuHQ93/exec';
-
-window.OBJECTIVES_URL = 'https://script.google.com/macros/s/AKfycbxOLOBFXb7vk46LuwF0FF_eZoIzf0bs4cX4TEa5BgN19jgFJmHeBEdZgtd8M_Oq26zSmw/exec';

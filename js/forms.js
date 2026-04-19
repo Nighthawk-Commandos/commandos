@@ -2,11 +2,24 @@
 //  forms.js — form renderers, state, validation, submission
 // ═══════════════════════════════════════════════════════════════
 
-'use strict';
+import { AUTH } from './auth.js';
+import { API  } from './api.js';
+import {
+    $, gv, sv, setHTML, esc, ea, setToday,
+    pageHeader, fld, fHead, honeypot, evTypeOpts,
+    btnBusy, btnDone, cooldown, toast,
+    setFieldErr, clrFieldErr, clrAll
+} from './utils.js';
+import {
+    initSingleAC, initMultiAC, renderTags,
+    closeAC, docOutsideClick
+} from './render.js';
+
+function setContent(html) { document.getElementById('content').innerHTML = html; }
 
 // ── Access check helper ───────────────────────────────────────
 function requireGroup() {
-    if (!window.AUTH.isInDivision()) {
+    if (!AUTH.isInDivision()) {
         setContent(
             '<div class="setup-wrap">' +
             '<div class="ph"><div class="ey">Access Restricted</div>' +
@@ -22,9 +35,9 @@ function requireGroup() {
 // ── Form: Event Log ───────────────────────────────────────────
 var EL = { host:'', attendees:[] };
 
-function renderFormEventLog() {
+export function renderFormEventLog() {
     if (requireGroup()) return;
-    if (!window.AUTH.canSubmitOfficerForms()) {
+    if (!AUTH.canSubmitOfficerForms()) {
         setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Access Restricted</div><h1>Officers Only</h1><div class="sub">Requires rank 235+ in the division or rank 7+ in the ghost sub-division.</div></div></div>');
         return;
     }
@@ -48,23 +61,23 @@ function renderFormEventLog() {
             'At least one attendee is required.') +
         fld('field-el-notes','Notes','','<textarea id="el-notes" placeholder="Any additional context…"></textarea>','') +
         '<div class="cooldown-bar-wrap" id="el-cd-wrap"><div class="cooldown-bar" id="el-cd-bar"></div></div>' +
-        '<div class="form-actions"><button class="btn-ghost" onclick="resetEL()">Clear</button>' +
-        '<button class="btn-primary" id="el-submit-btn" onclick="submitEL()">Submit Log</button></div>' +
+        '<div class="form-actions"><button class="btn-ghost" data-click="resetEL">Clear</button>' +
+        '<button class="btn-primary" id="el-submit-btn" data-click="submitEL">Submit Log</button></div>' +
         '</div></div></div>';
 
     setContent(h);
     EL = { host:'', attendees:[] };
     setToday('el-date');
     initSingleAC('el-host-inp','el-host-dd','pickELHost');
-    initMultiAC('el-att-inp','el-att-dd','el-att-area',function(){return EL.attendees;},'addELAtt');
+    initMultiAC('el-att-inp','el-att-dd','el-att-area',function(){return EL.attendees;},'addELAtt',removeELAtt);
     docOutsideClick([['el-host-inp','el-host-dd'],['el-att-inp','el-att-dd']]);
 }
 
-function pickELHost(n)    { EL.host=n; sv('el-host-inp',n); closeAC('el-host-dd'); clrFieldErr('field-el-host'); }
-function addELAtt(n)      { if(EL.attendees.indexOf(n)>-1)return; EL.attendees.push(n); renderTags('el-att-area','el-att-inp',EL.attendees,'removeELAtt'); sv('el-att-inp',''); closeAC('el-att-dd'); clrFieldErr('field-el-att'); }
-function removeELAtt(n)   { EL.attendees=EL.attendees.filter(function(a){return a!==n;}); renderTags('el-att-area','el-att-inp',EL.attendees,'removeELAtt'); }
+export function pickELHost(n)  { EL.host=n; sv('el-host-inp',n); closeAC('el-host-dd'); clrFieldErr('field-el-host'); }
+export function addELAtt(n)    { if(EL.attendees.indexOf(n)>-1)return; EL.attendees.push(n); renderTags('el-att-area','el-att-inp',EL.attendees,'removeELAtt'); sv('el-att-inp',''); closeAC('el-att-dd'); clrFieldErr('field-el-att'); }
+export function removeELAtt(n) { EL.attendees=EL.attendees.filter(function(a){return a!==n;}); renderTags('el-att-area','el-att-inp',EL.attendees,'removeELAtt'); }
 
-function resetEL() {
+export function resetEL() {
     EL = { host:'', attendees:[] };
     ['el-host-inp','el-ss','el-notes'].forEach(function(id){sv(id,'');});
     var s=$('el-type'); if(s)s.selectedIndex=0;
@@ -73,7 +86,7 @@ function resetEL() {
     clrAll(['field-el-host','field-el-date','field-el-type','field-el-ss','field-el-att']);
 }
 
-function submitEL() {
+export function submitEL() {
     var ok = true;
     var host = EL.host||(gv('el-host-inp')||'').trim(); if(!host){setFieldErr('field-el-host','Host required.'); ok=false;} else clrFieldErr('field-el-host');
     var date = gv('el-date')||'';                        if(!date){setFieldErr('field-el-date','Date required.'); ok=false;} else clrFieldErr('field-el-date');
@@ -94,9 +107,9 @@ function submitEL() {
 // ── Form: Edit Event Log ──────────────────────────────────────
 var EEL = { attendees:[], event:null };
 
-function renderFormEditEventLog() {
+export function renderFormEditEventLog() {
     if (requireGroup()) return;
-    if (!window.AUTH.canSubmitOfficerForms()) {
+    if (!AUTH.canSubmitOfficerForms()) {
         setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Access Restricted</div><h1>Officers Only</h1><div class="sub">Requires rank 235+ in the division or rank 7+ in the ghost sub-division.</div></div></div>');
         return;
     }
@@ -106,11 +119,11 @@ function renderFormEditEventLog() {
         '<div class="form-body">' +
         honeypot('eel-hp') +
         fld('field-eel-id','Event ID','*',
-            '<div class="inline-action"><input type="text" id="eel-id" placeholder="e.g. EVT-001"><button class="btn-ghost" type="button" onclick="lookupEELEvent()">Load Event</button></div>',
+            '<div class="inline-action"><input type="text" id="eel-id" placeholder="e.g. EVT-001"><button class="btn-ghost" type="button" data-click="lookupEELEvent">Load Event</button></div>',
             'Event ID is required.') +
         '<div id="eel-event-info" class="initially-hidden"></div>' +
         fld('field-eel-field','Field to Edit','*',
-            '<select id="eel-field" onchange="eelFieldChange()" disabled>'+
+            '<select id="eel-field" data-change="eelFieldChange" disabled>'+
             '<option value="" disabled selected>Load an event first…</option>'+
             '<option value="Host Username">Host Username</option>'+
             '<option value="Event Type">Event Type</option>'+
@@ -118,15 +131,15 @@ function renderFormEditEventLog() {
             '<option value="Attendees">Attendees</option>'+
             '</select>','Field required.') +
         '<div id="eel-nv-wrap" class="initially-hidden"></div>' +
-        '<div class="form-actions"><button class="btn-ghost" onclick="resetEEL()">Clear</button>' +
-        '<button class="btn-primary" id="eel-submit-btn" onclick="submitEEL()" disabled>Submit Request</button></div>' +
+        '<div class="form-actions"><button class="btn-ghost" data-click="resetEEL">Clear</button>' +
+        '<button class="btn-primary" id="eel-submit-btn" data-click="submitEEL" disabled>Submit Request</button></div>' +
         '</div></div></div>';
 
     setContent(h);
     EEL = { attendees:[], event:null };
 }
 
-function lookupEELEvent() {
+export function lookupEELEvent() {
     var id=(gv('eel-id')||'').trim(); if(!id){setFieldErr('field-eel-id','Event ID required.'); return;} clrFieldErr('field-eel-id');
     var info=$('eel-event-info');
     if(info){info.style.display='block'; info.innerHTML='<div class="field-hint italic">Loading…</div>';}
@@ -153,7 +166,7 @@ function lookupEELEvent() {
     }).catch(function(e){ if($('eel-event-info'))info.innerHTML='<div class="field-warn">Error: '+esc(e.message)+'</div>'; });
 }
 
-function eelFieldChange() {
+export function eelFieldChange() {
     var f=gv('eel-field')||'', wrap=$('eel-nv-wrap'), ev=EEL.event;
     if(!wrap||!f||!ev)return;
     wrap.style.display='block'; EEL.attendees=[];
@@ -176,15 +189,15 @@ function eelFieldChange() {
             '<div class="ac-wrap"><div class="tags-area" id="eel-att-area"><input class="tags-input" id="eel-att-inp" placeholder="Add or remove…"></div><div class="ac-dropdown" id="eel-att-dd"></div></div>',
             'Required.');
         renderTags('eel-att-area','eel-att-inp',EEL.attendees,'removeEELAtt');
-        initMultiAC('eel-att-inp','eel-att-dd','eel-att-area',function(){return EEL.attendees;},'addEELAtt');
+        initMultiAC('eel-att-inp','eel-att-dd','eel-att-area',function(){return EEL.attendees;},'addEELAtt',removeEELAtt);
         docOutsideClick([['eel-att-inp','eel-att-dd']]);
     }
     $('eel-submit-btn').disabled=false;
 }
 
-function pickEELHost(n)   { sv('eel-nv-inp',n); closeAC('eel-nv-dd'); clrFieldErr('field-eel-nv'); }
-function addEELAtt(n)     { if(EEL.attendees.indexOf(n)>-1)return; EEL.attendees.push(n); renderTags('eel-att-area','eel-att-inp',EEL.attendees,'removeEELAtt'); sv('eel-att-inp',''); closeAC('eel-att-dd'); clrFieldErr('field-eel-nv'); }
-function removeEELAtt(n)  { EEL.attendees=EEL.attendees.filter(function(a){return a!==n;}); renderTags('eel-att-area','eel-att-inp',EEL.attendees,'removeEELAtt'); }
+export function pickEELHost(n)   { sv('eel-nv-inp',n); closeAC('eel-nv-dd'); clrFieldErr('field-eel-nv'); }
+export function addEELAtt(n)     { if(EEL.attendees.indexOf(n)>-1)return; EEL.attendees.push(n); renderTags('eel-att-area','eel-att-inp',EEL.attendees,'removeEELAtt'); sv('eel-att-inp',''); closeAC('eel-att-dd'); clrFieldErr('field-eel-nv'); }
+export function removeEELAtt(n)  { EEL.attendees=EEL.attendees.filter(function(a){return a!==n;}); renderTags('eel-att-area','eel-att-inp',EEL.attendees,'removeEELAtt'); }
 
 function getEELVal() {
     var f=gv('eel-field')||'';
@@ -195,7 +208,7 @@ function getEELVal() {
     return '';
 }
 
-function resetEEL() {
+export function resetEEL() {
     EEL={attendees:[],event:null}; sv('eel-id','');
     var info=$('eel-event-info'); if(info){info.style.display='none'; info.innerHTML='';}
     var sel=$('eel-field'); if(sel){sel.disabled=true; sel.selectedIndex=0;}
@@ -204,7 +217,7 @@ function resetEEL() {
     clrAll(['field-eel-id','field-eel-field','field-eel-nv']);
 }
 
-function submitEEL() {
+export function submitEEL() {
     var ok=true;
     var id=(gv('eel-id')||'').trim(); if(!id||!EEL.event){setFieldErr('field-eel-id','Load a valid event first.'); ok=false;} else clrFieldErr('field-eel-id');
     var f=gv('eel-field')||'';        if(!f){setFieldErr('field-eel-field','Field required.'); ok=false;} else clrFieldErr('field-eel-field');
@@ -221,7 +234,7 @@ function submitEEL() {
 }
 
 // ── Form: Stats Transfer ──────────────────────────────────────
-function renderFormTransfer() {
+export function renderFormTransfer() {
     if (requireGroup()) return;
     var h = pageHeader('Stats Transfer','Request a username change or account transfer') +
         '<div class="form-page"><div class="form-card">' +
@@ -229,7 +242,7 @@ function renderFormTransfer() {
         '<div class="form-body">' +
         honeypot('tr-hp') +
         fld('field-tr-type','Transfer Type','*',
-            '<select id="tr-type" onchange="trTypeChange()"><option value="" disabled selected>Select type…</option>'+
+            '<select id="tr-type" data-change="trTypeChange"><option value="" disabled selected>Select type…</option>'+
             '<option value="Username Change">Username Change — same account, new name</option>'+
             '<option value="Account Transfer">Account Transfer — different account, same player</option>'+
             '</select>','Transfer type required.') +
@@ -240,15 +253,15 @@ function renderFormTransfer() {
         '<div class="field-hint">Accepted: Imgur, Gyazo, Prntscr. Discord links not accepted.</div>' +
         '</div>' +
         '<div id="tr-result"></div>' +
-        '<div class="form-actions"><button class="btn-ghost" onclick="resetTR()">Clear</button>' +
-        '<button class="btn-primary" id="tr-submit-btn" onclick="submitTR()">Submit Request</button></div>' +
+        '<div class="form-actions"><button class="btn-ghost" data-click="resetTR">Clear</button>' +
+        '<button class="btn-primary" id="tr-submit-btn" data-click="submitTR">Submit Request</button></div>' +
         '</div></div></div>';
     setContent(h);
 }
 
-function trTypeChange() { var t=gv('tr-type')||''; var ef=$('tr-ev-field'); if(ef)ef.style.display=(t==='Account Transfer')?'block':'none'; }
+export function trTypeChange() { var t=gv('tr-type')||''; var ef=$('tr-ev-field'); if(ef)ef.style.display=(t==='Account Transfer')?'block':'none'; }
 
-function resetTR() {
+export function resetTR() {
     ['tr-old','tr-new','tr-ev'].forEach(function(id){sv(id,'');});
     var s=$('tr-type'); if(s)s.selectedIndex=0;
     var ef=$('tr-ev-field'); if(ef)ef.style.display='none';
@@ -256,7 +269,7 @@ function resetTR() {
     var r=$('tr-result'); if(r)r.innerHTML='';
 }
 
-function submitTR() {
+export function submitTR() {
     var ok=true;
     var type=(gv('tr-type')||'').trim(); if(!type){setFieldErr('field-tr-type','Type required.'); ok=false;} else clrFieldErr('field-tr-type');
     var oldU=(gv('tr-old')||'').trim();  if(!oldU){setFieldErr('field-tr-old','Old username required.'); ok=false;} else clrFieldErr('field-tr-old');
@@ -281,7 +294,7 @@ function submitTR() {
 // ── Form: Exemption ───────────────────────────────────────────
 var EX = { username:'', departments:[] };
 
-function renderFormExemption() {
+export function renderFormExemption() {
     if (requireGroup()) return;
     var h = pageHeader('Exemption Request','Submit an activity exemption') +
         '<div class="form-page"><div class="form-card">' +
@@ -293,21 +306,21 @@ function renderFormExemption() {
             'Username required.') +
         '<div id="ex-days-info"></div>' +
         fld('field-ex-reason','Reason','*','<input type="text" id="ex-reason" placeholder="Reason for exemption">','Reason required.') +
-        fld('field-ex-start','Start Date','*','<input type="date" id="ex-start" onchange="calcExDays()">','Start date required.') +
-        fld('field-ex-end','End Date (must be Monday)','*','<input type="date" id="ex-end" onchange="calcExDays()">','End date required.') +
+        fld('field-ex-start','Start Date','*','<input type="date" id="ex-start" data-change="calcExDays">','Start date required.') +
+        fld('field-ex-end','End Date (must be Monday)','*','<input type="date" id="ex-end" data-change="calcExDays">','End date required.') +
         '<div id="ex-calc-info"></div>' +
         fld('field-ex-dept','Departments','*',
             '<div class="ac-wrap">'+
-            '<div class="tags-area" id="ex-dept-area"><input class="tags-input" id="ex-dept-inp" placeholder="Select departments…" readonly onfocus="toggleExDeptDD()" autocomplete="off"></div>'+
+            '<div class="tags-area" id="ex-dept-area"><input class="tags-input" id="ex-dept-inp" placeholder="Select departments…" readonly data-focus="toggleExDeptDD" autocomplete="off"></div>'+
             '<div class="ac-dropdown" id="ex-dept-dd">'+
             ['Ghosts','Progression','Welfare','IA','Librarium','N/A'].map(function(d){
-                return '<div class="ac-option" onmousedown="toggleExDept(\''+d+'\')">'+d+'</div>';
+                return '<div class="ac-option" data-mousedown="toggleExDept" data-dept="'+esc(d)+'">'+d+'</div>';
             }).join('')+
             '</div>'+
             '</div>','At least one department required.') +
         '<div class="cooldown-bar-wrap" id="ex-cd-wrap"><div class="cooldown-bar" id="ex-cd-bar"></div></div>' +
-        '<div class="form-actions"><button class="btn-ghost" onclick="resetEX()">Clear</button>' +
-        '<button class="btn-primary" id="ex-submit-btn" onclick="submitEX()">Submit Exemption</button></div>' +
+        '<div class="form-actions"><button class="btn-ghost" data-click="resetEX">Clear</button>' +
+        '<button class="btn-primary" id="ex-submit-btn" data-click="submitEX">Submit Exemption</button></div>' +
         '</div></div></div>';
 
     setContent(h);
@@ -317,9 +330,9 @@ function renderFormExemption() {
     docOutsideClick([['ex-user-inp','ex-user-dd'],['ex-dept-inp','ex-dept-dd']]);
 }
 
-function toggleExDeptDD() { var dd=$('ex-dept-dd'); if(dd)dd.classList.toggle('open'); }
+export function toggleExDeptDD() { var dd=$('ex-dept-dd'); if(dd)dd.classList.toggle('open'); }
 
-function toggleExDept(name) {
+export function toggleExDept(name) {
     var idx=EX.departments.indexOf(name);
     if(idx===-1) EX.departments.push(name); else EX.departments.splice(idx,1);
     renderExDeptTags();
@@ -336,14 +349,14 @@ function renderExDeptTags() {
     var frag=document.createDocumentFragment();
     EX.departments.forEach(function(name){
         var tag=document.createElement('span'); tag.className='tag';
-        tag.innerHTML=esc(name)+'<i class="tag-remove" onmousedown="event.preventDefault();event.stopPropagation();toggleExDept(\''+ea(name)+'\')">×</i>';
+        tag.innerHTML=esc(name)+'<i class="tag-remove" data-mousedown="exTagRemove" data-dept="'+ea(name)+'">×</i>';
         frag.appendChild(tag);
     });
     area.insertBefore(frag,inp);
     inp.placeholder=EX.departments.length?'':'Select departments…';
 }
 
-function pickEXUser(name) {
+export function pickEXUser(name) {
     EX.username=name; sv('ex-user-inp',name); closeAC('ex-user-dd'); clrFieldErr('field-ex-user');
     var info=$('ex-days-info');
     if(info) info.innerHTML='<div class="field-hint italic">Looking up exemption days…</div>';
@@ -359,7 +372,7 @@ function pickEXUser(name) {
     }).catch(function(){ var i=$('ex-days-info'); if(i)i.innerHTML='<div class="field-hint">Could not retrieve exemption days.</div>'; });
 }
 
-function calcExDays() {
+export function calcExDays() {
     var sv2=gv('ex-start')||'', ev2=gv('ex-end')||'', info=$('ex-calc-info'); if(!info||!sv2||!ev2)return;
     var s=new Date(sv2+'T00:00:00'), e=new Date(ev2+'T00:00:00');
     if(e<=s){info.innerHTML='<div class="field-warn">End date must be after start date.</div>';return;}
@@ -370,7 +383,7 @@ function calcExDays() {
     info.innerHTML='<div class="field-info"><div class="info-row"><span class="ik">Days Requested</span><span class="iv">'+days+'</span></div></div>';
 }
 
-function resetEX() {
+export function resetEX() {
     EX={username:'',departments:[]};
     ['ex-user-inp','ex-reason','ex-start','ex-end'].forEach(function(id){sv(id,'');});
     renderExDeptTags();
@@ -380,7 +393,7 @@ function resetEX() {
     var ci=$('ex-calc-info'); if(ci)ci.innerHTML='';
 }
 
-function submitEX() {
+export function submitEX() {
     var ok=true;
     var user=EX.username||(gv('ex-user-inp')||'').trim(); if(!user){setFieldErr('field-ex-user','Username required.'); ok=false;} else clrFieldErr('field-ex-user');
     var reason=(gv('ex-reason')||'').trim();               if(!reason){setFieldErr('field-ex-reason','Reason required.'); ok=false;} else clrFieldErr('field-ex-reason');
@@ -408,7 +421,7 @@ function submitEX() {
 // ── Form: Missing AP ──────────────────────────────────────────
 var MA = { username:'', host:'' };
 
-function renderFormMissingAP() {
+export function renderFormMissingAP() {
     if (requireGroup()) return;
     var h = pageHeader('Missing AP Request','Request activity points for an unlogged event') +
         '<div class="form-page"><div class="form-card">' +
@@ -427,8 +440,8 @@ function renderFormMissingAP() {
         fld('field-ma-ev','Evidence (Screenshot)','*','<input type="text" id="ma-ev" placeholder="https://imgur.com/…">','Screenshot required.') +
         '<div class="field-hint">Accepted: Imgur, Gyazo, Prntscr, Lightshot. Discord links not accepted.</div>' +
         '<div class="cooldown-bar-wrap" id="ma-cd-wrap"><div class="cooldown-bar" id="ma-cd-bar"></div></div>' +
-        '<div class="form-actions"><button class="btn-ghost" onclick="resetMA()">Clear</button>' +
-        '<button class="btn-primary" id="ma-submit-btn" onclick="submitMA()">Submit Request</button></div>' +
+        '<div class="form-actions"><button class="btn-ghost" data-click="resetMA">Clear</button>' +
+        '<button class="btn-primary" id="ma-submit-btn" data-click="submitMA">Submit Request</button></div>' +
         '</div></div></div>';
 
     setContent(h);
@@ -439,10 +452,10 @@ function renderFormMissingAP() {
     docOutsideClick([['ma-user-inp','ma-user-dd'],['ma-host-inp','ma-host-dd']]);
 }
 
-function pickMAUser(n) { MA.username=n; sv('ma-user-inp',n); closeAC('ma-user-dd'); clrFieldErr('field-ma-user'); }
-function pickMAHost(n) { MA.host=n;     sv('ma-host-inp',n); closeAC('ma-host-dd'); clrFieldErr('field-ma-host'); }
+export function pickMAUser(n) { MA.username=n; sv('ma-user-inp',n); closeAC('ma-user-dd'); clrFieldErr('field-ma-user'); }
+export function pickMAHost(n) { MA.host=n;     sv('ma-host-inp',n); closeAC('ma-host-dd'); clrFieldErr('field-ma-host'); }
 
-function resetMA() {
+export function resetMA() {
     MA={username:'',host:''};
     ['ma-user-inp','ma-host-inp','ma-ev'].forEach(function(id){sv(id,'');});
     var s=$('ma-type'); if(s)s.selectedIndex=0;
@@ -450,7 +463,7 @@ function resetMA() {
     clrAll(['field-ma-user','field-ma-host','field-ma-date','field-ma-type','field-ma-ev']);
 }
 
-function submitMA() {
+export function submitMA() {
     var ok=true;
     var user=MA.username||(gv('ma-user-inp')||'').trim(); if(!user){setFieldErr('field-ma-user','Your username required.'); ok=false;} else clrFieldErr('field-ma-user');
     var host=MA.host||(gv('ma-host-inp')||'').trim();     if(!host){setFieldErr('field-ma-host','Host required.'); ok=false;} else clrFieldErr('field-ma-host');

@@ -49,12 +49,12 @@ exports.handler = async function (event) {
     const secHeaders = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 
     if (!token) {
-        return { statusCode: 401, headers: secHeaders, body: JSON.stringify({ error: 'not_authenticated' }) };
+        return { statusCode: 200, headers: secHeaders, body: JSON.stringify({ authenticated: false }) };
     }
 
     const session = verifySession(token, secret);
     if (!session) {
-        return { statusCode: 401, headers: secHeaders, body: JSON.stringify({ error: 'invalid_session' }) };
+        return { statusCode: 200, headers: secHeaders, body: JSON.stringify({ authenticated: false }) };
     }
 
     return {

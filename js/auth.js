@@ -1,93 +1,101 @@
 // ═══════════════════════════════════════════════════════════════
 //  auth.js — client-side auth state, rank helpers, session load
-//  Exposes window.AUTH (populated by AUTH.load())
+//
+//  AUTH is a module-private object exported as a named constant.
+//  Internal state lives in a closure — never exposed on window.
+//
+//  Call initAuth(session) before AUTH.load() to consume a
+//  pre-fetched session and skip the /api/auth/me round-trip.
 // ═══════════════════════════════════════════════════════════════
-'use strict';
 
-window.AUTH = {
-    user:       null,   // null = not logged in, object = session data
-    loaded:     false,
-    adminPerms: null,   // null = not loaded; object = { superadmin, roleManager, disSync, ... }
+var _user       = null;
+var _loaded     = false;
+var _adminPerms = null;
 
-    // ── Load current session from server ──────────────────────
+export var AUTH = {
+    get user()       { return _user; },
+    get loaded()     { return _loaded; },
+    get adminPerms() { return _adminPerms; },
+
     load: function () {
+        if (_loaded) return Promise.resolve(_user);
         return fetch('/api/auth/me', { credentials: 'same-origin' })
             .then(function (r) {
                 if (!r.ok) throw new Error('not_authenticated');
                 return r.json();
             })
             .then(function (data) {
-                window.AUTH.user   = data;
-                window.AUTH.loaded = true;
+                if (!data || data.authenticated === false) {
+                    _user = null; _loaded = true; return null;
+                }
+                _user   = data;
+                _loaded = true;
                 return data;
             })
             .catch(function () {
-                window.AUTH.user   = null;
-                window.AUTH.loaded = true;
+                _user   = null;
+                _loaded = true;
                 return null;
             });
     },
 
-    // ── Load admin permissions from server ────────────────────
     loadAdminPerms: function () {
         return fetch('/api/admin/perms', { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (data) { window.AUTH.adminPerms = data || null; })
-            .catch(function () { window.AUTH.adminPerms = null; });
+            .then(function (data) { _adminPerms = data || null; })
+            .catch(function () { _adminPerms = null; });
     },
 
-    // ── Access helpers ────────────────────────────────────────
     isLoggedIn: function () {
-        return !!window.AUTH.user;
+        return !!_user;
     },
     isInDivision: function () {
-        var u = window.AUTH.user;
-        return !!(u && u.divisionRank > 0);
+        return !!(_user && _user.divisionRank > 0);
     },
-    // Event Log / Edit Event Log: rank 235+ in division OR rank 7+ in ghost sub-div
     canSubmitOfficerForms: function () {
-        var u = window.AUTH.user;
-        if (!u) return false;
-        return u.divisionRank >= 235 || u.ghostRank >= 7;
+        if (!_user) return false;
+        return _user.divisionRank >= 235 || _user.ghostRank >= 7;
     },
-    // Division Objectives & Deployment Incentive System
     canAccessHigherSections: function () {
-        var u = window.AUTH.user;
-        return !!(u && u.divisionRank >= 243);
+        return !!(_user && _user.divisionRank >= 243);
     },
-    // Legacy: still used in dis.js raffle view
     canAccessAdmin: function () {
-        return window.AUTH.canAdminAny();
+        return AUTH.canAdminAny();
     },
-    // Unified admin: rank 246+ OR any admin permission granted
     canAdminAny: function () {
-        var u = window.AUTH.user;
-        if (u && u.divisionRank >= 246) return true;
-        var p = window.AUTH.adminPerms;
-        return !!(p && (p.roleAssign || p.roleEdit || p.disSync || p.disTiles || p.disPoints || p.disRaffle || p.disGamePool || p.disAudit || p.mfOfficers || p.mfRemote));
+        if (_user && _user.divisionRank >= 246) return true;
+        var p = _adminPerms;
+        return !!(p && (p.roleAssign || p.roleEdit || p.disSync || p.disTiles ||
+                        p.disPoints || p.disRaffle || p.disGamePool || p.disAudit ||
+                        p.mfOfficers || p.mfRemote));
     },
-    // Check if user can access a specific admin tab
     canAdminTab: function (tab) {
-        var u = window.AUTH.user;
-        if (u && u.divisionRank >= 246) return true;
-        var p = window.AUTH.adminPerms;
+        if (_user && _user.divisionRank >= 246) return true;
+        var p = _adminPerms;
         if (!p) return false;
         var map = {
-            sync:      'disSync',
-            tiles:     'disTiles',
-            points:    'disPoints',
-            raffle:    'disRaffle',
-            gamepool:  'disGamePool',
-            audit:     'disAudit',
-            errors:    'disAudit'
+            sync:     'disSync',
+            tiles:    'disTiles',
+            points:   'disPoints',
+            raffle:   'disRaffle',
+            gamepool: 'disGamePool',
+            audit:    'disAudit',
+            errors:   'disAudit'
         };
         if (tab === 'roles')     return !!(p.roleAssign || p.roleEdit);
         if (tab === 'mainframe') return !!(p.mfOfficers || p.mfRemote);
         return !!p[map[tab]];
     },
-
-    // ── Logout ────────────────────────────────────────────────
     logout: function () {
-        window.location.href = '/api/auth/logout';
+        location.href = '/api/auth/logout';
     }
 };
+
+// Called by app.js with the pre-fetched session from the boot
+// script so AUTH.load() can skip a second /api/auth/me fetch.
+export function initAuth(session) {
+    if (session !== undefined && session !== null) {
+        _user   = session;
+        _loaded = true;
+    }
+}

@@ -4,11 +4,15 @@
   "private": true,
   "description": "Nighthawk Commandos Mainframe — TNI:C division management system",
   "scripts": {
-    "dev": "netlify dev"
+    "dev": "npm run build && netlify dev",
+    "build": "esbuild js/app.js --bundle --minify --format=esm --platform=browser --outfile=dist/app.min.js",
+    "watch": "esbuild js/app.js --bundle --format=esm --platform=browser --outfile=dist/app.min.js --watch"
   },
   "dependencies": {
     "@netlify/blobs": "^7.3.0",
-    "dotenv-webpack": "^9.0.0",
     "netlify": "^24.9.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
   }
 }

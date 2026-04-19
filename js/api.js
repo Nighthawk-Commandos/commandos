@@ -1,23 +1,22 @@
 // ═══════════════════════════════════════════════════════════════
-//  api.js — Apps Script transport + localStorage cache
-//  All calls use GET so no CORS preflight fires.
-//  Mutations encode payload as ?payload=<json> in the query string.
+//  api.js — auth-gated Netlify proxy transport + localStorage cache
+//
+//  All requests go through server-side Netlify functions that
+//  verify the session cookie. Apps Script URLs are never exposed
+//  to the client.
+//
+//  Reads:     GET /api/mainframe/query?fn=...&payload=...
+//  Mutations: POST /api/mainframe/submit  { fn, payload }
+//  Main data: GET /api/mainframe/data     (existing proxy)
 // ═══════════════════════════════════════════════════════════════
 
-'use strict';
+export var API = (function () {
 
-var API = (function () {
+    var CACHE_TTL  = 60 * 60 * 1000;
+    var MEMBER_TTL = 60 * 60 * 1000;
 
-    // ── Config ──────────────────────────────────────────────────
-    // Set SCRIPT_URL in config.js (not committed to source control).
-    var URL        = window.SCRIPT_URL || '';
-    var CACHE_TTL  = 60 * 60 * 1000;  // 1 hour for main data (shared globally, not per-user)
-    var MEMBER_TTL = 60 * 60 * 1000;  // 1 hour for member list
-
-    // ── In-memory fallback (survives page session, faster than LS)
     var _mem = {};
 
-    // ── localStorage helpers ────────────────────────────────────
     function lsGet(key) {
         try {
             var raw = localStorage.getItem(key);
@@ -31,83 +30,77 @@ var API = (function () {
     function lsSet(key, data, ttl) {
         try {
             localStorage.setItem(key, JSON.stringify({ data: data, exp: Date.now() + ttl }));
-        } catch (_) { /* storage full — silently skip */ }
+        } catch (_) {}
     }
 
     function lsClear(key) {
         try { localStorage.removeItem(key); } catch (_) {}
     }
 
-    // ── Core fetch — always GET ─────────────────────────────────
-    function call(fn, payload) {
-        var u = URL + '?action=api&fn=' + encodeURIComponent(fn);
+    function query(fn, payload) {
+        var u = '/api/mainframe/query?fn=' + encodeURIComponent(fn);
         if (payload && Object.keys(payload).length) {
             u += '&payload=' + encodeURIComponent(JSON.stringify(payload));
         }
-        return fetch(u, { method: 'GET', cache: 'no-store' })
+        return fetch(u, { credentials: 'same-origin', cache: 'no-store' })
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             });
     }
 
-    // ── Cached read ─────────────────────────────────────────────
+    function submit(fn, payload) {
+        return fetch('/api/mainframe/submit', {
+            method:      'POST',
+            credentials: 'same-origin',
+            headers:     { 'Content-Type': 'application/json' },
+            body:        JSON.stringify({ fn: fn, payload: payload || {} })
+        }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        });
+    }
+
     function cachedCall(cacheKey, fn, payload, ttl) {
-        // 1. In-memory hit (fastest)
         if (_mem[cacheKey] && Date.now() < _mem[cacheKey].exp) {
             return Promise.resolve(_mem[cacheKey].data);
         }
-        // 2. localStorage hit
         var lsData = lsGet(cacheKey);
         if (lsData) {
             _mem[cacheKey] = { data: lsData, exp: Date.now() + ttl };
             return Promise.resolve(lsData);
         }
-        // 3. Network
-        return call(fn, payload).then(function (data) {
+        return query(fn, payload).then(function (data) {
             _mem[cacheKey] = { data: data, exp: Date.now() + ttl };
             lsSet(cacheKey, data, ttl);
             return data;
         });
     }
 
-    // ── Public API ───────────────────────────────────────────────
     return {
-
-        /** Bust all caches (call after a successful mutation) */
         bustCache: function (key) {
             if (key) { delete _mem[key]; lsClear(key); }
             else { _mem = {}; try { localStorage.clear(); } catch (_) {} }
         },
 
-        /**
-         * Check the server's deploy version against what's stored locally.
-         * If the DEPLOY_ID changed (i.e. a new version was pushed), wipe all
-         * localStorage caches so users get fresh data without a manual reload.
-         * Called once at boot, in parallel with AUTH.load().
-         */
         checkVersion: function () {
             return fetch('/api/version', { credentials: 'same-origin', cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
-                    if (!data || !data.v) return; // no DEPLOY_ID in env (local dev) — skip
+                    if (!data || !data.v) return;
                     try {
                         var stored = localStorage.getItem('c:deployVer');
                         if (stored !== null && stored !== data.v) {
-                            // New deploy detected — clear all stale cached data
                             _mem = {};
                             localStorage.clear();
                         }
                         localStorage.setItem('c:deployVer', data.v);
                     } catch (_) {}
                 })
-                .catch(function () {}); // never block boot on a version check failure
+                .catch(function () {});
         },
 
-        /** Main spreadsheet data — served via server-side cache proxy for scale.
-         *  Falls back to direct Apps Script call if the proxy is unavailable. */
         getAllData: function () {
-            // In-memory or localStorage cache hit → skip network entirely
             if (_mem['c:allData'] && Date.now() < _mem['c:allData'].exp) {
                 return Promise.resolve(_mem['c:allData'].data);
             }
@@ -116,51 +109,39 @@ var API = (function () {
                 _mem['c:allData'] = { data: lsData, exp: Date.now() + CACHE_TTL };
                 return Promise.resolve(lsData);
             }
-            // Fetch from server-side proxy (handles CDN + Blobs caching for all users)
             return fetch('/api/mainframe/data', { credentials: 'same-origin', cache: 'no-store' })
                 .then(function (r) {
-                    if (!r.ok) throw new Error('proxy HTTP ' + r.status);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
                 })
                 .then(function (data) {
                     _mem['c:allData'] = { data: data, exp: Date.now() + CACHE_TTL };
                     lsSet('c:allData', data, CACHE_TTL);
                     return data;
-                })
-                .catch(function () {
-                    // Proxy unavailable — fall back to direct Apps Script call
-                    return cachedCall('c:allData', 'getAllData', null, CACHE_TTL);
                 });
         },
 
-        /** Member list — used for autocomplete */
         getGroupMembers: function () {
             return cachedCall('c:members', 'getGroupMembers', null, MEMBER_TTL);
         },
 
-        /** Event lookup — short TTL, keyed by event ID */
         getEventById: function (eventId) {
-            var key = 'c:evt:' + eventId;
-            return cachedCall(key, 'getEventById', { eventId: eventId }, 60 * 1000);
+            return cachedCall('c:evt:' + eventId, 'getEventById', { eventId: eventId }, 60 * 1000);
         },
 
-        /** Exemption days — cache per user for 2 min */
         getExemptionDays: function (username) {
-            var key = 'c:exdays:' + username.toLowerCase();
-            return cachedCall(key, 'getExemptionDays', { username: username }, 2 * 60 * 1000);
+            return cachedCall('c:exdays:' + username.toLowerCase(), 'getExemptionDays', { username: username }, 2 * 60 * 1000);
         },
-
-        // ── Mutations — no caching, bust allData on success ───────
 
         submitEventLog: function (payload) {
-            return call('submitEventLog', payload).then(function (r) {
+            return submit('submitEventLog', payload).then(function (r) {
                 if (r && r.success) API.bustCache('c:allData');
                 return r;
             });
         },
 
         submitEditEventLog: function (payload) {
-            return call('submitEditEventLog', payload).then(function (r) {
+            return submit('submitEditEventLog', payload).then(function (r) {
                 if (r && r.success) {
                     API.bustCache('c:allData');
                     API.bustCache('c:evt:' + (payload.eventId || ''));
@@ -170,14 +151,14 @@ var API = (function () {
         },
 
         submitStatsTransfer: function (payload) {
-            return call('submitStatsTransfer', payload).then(function (r) {
+            return submit('submitStatsTransfer', payload).then(function (r) {
                 if (r && r.success) API.bustCache('c:allData');
                 return r;
             });
         },
 
         submitExemption: function (payload) {
-            return call('submitExemption', payload).then(function (r) {
+            return submit('submitExemption', payload).then(function (r) {
                 if (r && r.success) {
                     API.bustCache('c:allData');
                     API.bustCache('c:exdays:' + (payload.username || '').toLowerCase());
@@ -187,10 +168,9 @@ var API = (function () {
         },
 
         submitMissingAP: function (payload) {
-            return call('submitMissingAP', payload);
+            return submit('submitMissingAP', payload);
         },
 
-        /** Force-refresh main data (e.g. manual refresh button) */
         refreshAllData: function () {
             API.bustCache('c:allData');
             return API.getAllData();

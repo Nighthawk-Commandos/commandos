@@ -2,7 +2,7 @@
 
 [build]
 publish = "."
-command = "npm install"
+command = "npm install && npm run build"
 
 [build.environment]
 NODE_VERSION = "20"
@@ -76,6 +76,22 @@ from   = "/api/mainframe/data"
 to     = "/.netlify/functions/mainframe-data"
 status = 200
 
+[[redirects]]
+from   = "/api/mainframe/query"
+to     = "/.netlify/functions/mainframe-query"
+status = 200
+
+[[redirects]]
+from   = "/api/mainframe/submit"
+to     = "/.netlify/functions/mainframe-submit"
+status = 200
+
+# ── Objectives data proxy ────────────────────────────────────────
+[[redirects]]
+from   = "/api/objectives/data"
+to     = "/.netlify/functions/objectives-data"
+status = 200
+
 # ── Deploy version (client-side cache busting) ──────────────────
 [[redirects]]
 from   = "/api/version"
@@ -114,11 +130,17 @@ from   = "/tos"
 to     = "/tos.html"
 status = 200
 
-# ── SPA fallback ───────────────────────────────────────────────
+# ── Root → app ─────────────────────────────────────────────────
 [[redirects]]
-from   = "/*"
+from   = "/"
 to     = "/index.html"
 status = 200
+
+# ── Everything else → meme 404 ─────────────────────────────────
+[[redirects]]
+from   = "/*"
+to     = "/404.html"
+status = 404
 
 # ── Cache headers ──────────────────────────────────────────────
 [[headers]]
@@ -128,6 +150,11 @@ Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
 for = "/js/*"
+[headers.values]
+Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+for = "/dist/*"
 [headers.values]
 Cache-Control = "no-cache, must-revalidate"
 
@@ -146,4 +173,4 @@ X-Frame-Options        = "DENY"
 X-Content-Type-Options = "nosniff"
 Referrer-Policy        = "strict-origin-when-cross-origin"
 Permissions-Policy     = "camera=(), microphone=(), geolocation=()"
-Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com https://cdn.discordapp.com https://media.discordapp.net data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com;"
+Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com https://cdn.discordapp.com https://media.discordapp.net data:; connect-src 'self';"

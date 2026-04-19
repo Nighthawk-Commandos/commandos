@@ -2,9 +2,56 @@
 //  app.js — boot, auth, home page, navigation, data refresh
 // ═══════════════════════════════════════════════════════════════
 
-'use strict';
+import { AUTH, initAuth } from './auth.js';
+import { API } from './api.js';
+import { esc, debounce, toast } from './utils.js';
+import {
+    renderSettings, renderActivity, renderActivityRows,
+    renderOfficers, renderOfficerRows,
+    renderHonored, renderHonoredRows,
+    renderDepartments, buildDeptBlocks,
+    renderEvents, renderUnifiedAdmin,
+    setMembers, adminTab,
+    adminPermToggle, adminEditRole, adminCancelEditRole,
+    adminSaveRole, adminDeleteRole, adminShowNewRole,
+    adminCancelNewRole, adminSaveNewRole,
+    adminToggleUserRole, adminAddUser, adminRemoveUser,
+    adminAddOfficer, adminRemoveOfficer,
+    pickAdminOfficerAdd, pickAdminOfficerRm,
+    setActFilter
+} from './render.js';
+import {
+    renderObjectivesSection, objGo
+} from './objectives.js';
+import {
+    renderDISSection, disLeave,
+    disNavGo, disTriggerSync, disSetGlobalMultiplier,
+    disAdvanceWeek, disAdvanceMonth, disResetWeek,
+    disRegenerateBoard, disSetTileEventType, disSetTilePoints,
+    disUnlockTile, disLockTile, disForceClaim,
+    disAdjustPoints, disAdjustRaffle, disRunRaffle,
+    disAddGame, disEditGame, disRemoveGame
+} from './dis.js';
+import {
+    renderFormEventLog, renderFormEditEventLog,
+    renderFormTransfer, renderFormExemption, renderFormMissingAP,
+    pickELHost, addELAtt, removeELAtt,
+    pickEELHost, addEELAtt, removeEELAtt,
+    lookupEELEvent, eelFieldChange,
+    trTypeChange, resetTR, submitTR,
+    pickEXUser, calcExDays, toggleExDeptDD, toggleExDept,
+    resetEX, submitEX, submitEL, resetEL, resetEEL, submitEEL,
+    pickMAUser, pickMAHost, resetMA, submitMA
+} from './forms.js';
 
-window._D = null;
+// Consume boot session immediately — capture then wipe so nothing lingers on window
+var _bs = window._BOOT_SESSION;
+window._BOOT_SESSION = undefined;
+delete window._BOOT_SESSION;
+initAuth(_bs);
+
+// Module-private data store — no window._D
+var _D = null;
 
 // ── Content setter ────────────────────────────────────────────
 function setContent(html) {
@@ -12,9 +59,6 @@ function setContent(html) {
 }
 
 // ── Home page section definitions ─────────────────────────────
-// To add a new section: append an object to HOME_SECTIONS below.
-// accessFn: function returning true/false — controls lock state.
-// handler:  function called when the card is clicked (unlocked).
 var HOME_SECTIONS = [
     {
         id:       'mainframe',
@@ -22,7 +66,7 @@ var HOME_SECTIONS = [
         tagColor: 'var(--accent)',
         title:    'Commandos Mainframe',
         desc:     'Activity & officer trackers, event logs, department data and submission forms.',
-        accessFn: function () { return window.AUTH.isInDivision(); },
+        accessFn: function () { return AUTH.isInDivision(); },
         lockMsg:  'Nighthawk Commandos division membership required.'
     },
     {
@@ -31,7 +75,7 @@ var HOME_SECTIONS = [
         tagColor: '#4a7fc8',
         title:    'Division Objectives',
         desc:     'Current monthly directives and per-department task tracking.',
-        accessFn: function () { return window.AUTH.canAccessHigherSections(); },
+        accessFn: function () { return AUTH.canAccessHigherSections(); },
         lockMsg:  'Requires rank 243 (Officer) or above.'
     },
     {
@@ -40,7 +84,7 @@ var HOME_SECTIONS = [
         tagColor: '#7c4ab8',
         title:    'Deployment Incentive System',
         desc:     'Competitive lock-out deployment grid — claim tiles by hosting events, earn raffle entries.',
-        accessFn: function () { return window.AUTH.canSubmitOfficerForms(); },
+        accessFn: function () { return AUTH.canSubmitOfficerForms(); },
         lockMsg:  'Requires rank 235 (Officer) or above.'
     },
     {
@@ -49,20 +93,14 @@ var HOME_SECTIONS = [
         tagColor: 'var(--red)',
         title:    'Admin Dashboard',
         desc:     'System administration — role management, DIS moderation, audit logs.',
-        accessFn: function () { return window.AUTH.canAdminAny(); },
+        accessFn: function () { return AUTH.canAdminAny(); },
         lockMsg:  'Admin access required.'
     }
-    // ── Add new sections here ──────────────────────────────────
-    // {
-    //     id: 'my-section', tag: 'TAG', tagColor: '#hex',
-    //     title: 'My Section', desc: 'Description.',
-    //     accessFn: function () { return true; }, lockMsg: ''
-    // }
 ];
 
 // ── Home page render ──────────────────────────────────────────
 function renderHomeScreen() {
-    var u = window.AUTH.user;
+    var u = AUTH.user;
 
     var cards = HOME_SECTIONS.map(function (s) {
         var accessible = s.accessFn();
@@ -126,12 +164,12 @@ function enterSection(el) {
 }
 
 function enterAdmin() {
-    if (!window.AUTH || !window.AUTH.canAdminAny()) return;
+    if (!AUTH.canAdminAny()) return;
     renderUnifiedAdmin();
 }
 
 function enterMainframe() {
-    if (!window.AUTH || !window.AUTH.isInDivision()) return;
+    if (!AUTH.isInDivision()) return;
     document.getElementById('home-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
@@ -139,34 +177,16 @@ function enterMainframe() {
 }
 
 function enterObjectives() {
-    if (!window.AUTH || !window.AUTH.canAccessHigherSections()) return;
+    if (!AUTH.canAccessHigherSections()) return;
     renderObjectivesSection();
 }
 
 function enterDIS() {
-    if (!window.AUTH || !window.AUTH.canSubmitOfficerForms()) return;
+    if (!AUTH.canSubmitOfficerForms()) return;
     renderDISSection();
 }
 
-function renderSectionPlaceholder(title, msg) {
-    var hs = document.getElementById('home-screen');
-    if (!hs) return;
-    hs.innerHTML =
-        '<div class="bg-grid"></div>' +
-        '<div class="home-inner">' +
-        '<div class="section-ph-head">' +
-        '<div class="home-eyebrow">NIGHTHAWK COMMANDOS &mdash; TNIC</div>' +
-        '<h1 class="home-title">' + esc(title) + '</h1>' +
-        '</div>' +
-        '<div class="section-placeholder">' +
-        '<div class="section-placeholder-msg">' + esc(msg) + '</div>' +
-        '<button class="btn-ghost" style="margin-top:18px" data-click="showHomeScreen">&#8592; Back to Hub</button>' +
-        '</div>' +
-        '</div>';
-}
-
 function showHomeScreen() {
-    // Tear down mainframe view if active
     var appEl = document.getElementById('app');
     var hbg   = document.getElementById('hbg');
     if (appEl && !appEl.classList.contains('hidden')) {
@@ -174,35 +194,34 @@ function showHomeScreen() {
     }
     if (hbg) hbg.style.display = 'none';
 
-    // Stop DIS polling if leaving DIS
-    if (typeof disLeave === 'function') disLeave();
+    disLeave();
 
-    // Reset home-screen element — clear any section-specific classes/styles
     var hs = document.getElementById('home-screen');
     if (hs) {
-        hs.className = '';        // clears obj-mode, hidden, etc.
+        hs.className = '';
         hs.removeAttribute('style');
     }
 
-    // Use rAF so the browser applies the class reset before we write innerHTML,
-    // preventing the "everything snaps to top-right" flash from lingering flex state.
     requestAnimationFrame(renderHomeScreen);
 }
-function doLogout() { window.AUTH.logout(); }
+
+function doLogout() { AUTH.logout(); }
 
 // ── Navigation (mainframe pages) ─────────────────────────────
+var actFilterState = 'all';
+
 var PAGES = {
-    settings:            function () { setContent(renderSettings(window._D)); },
-    activity:            function () { setContent(renderActivity(window._D)); wireActivity(); },
-    officers:            function () { setContent(renderOfficers(window._D)); wireOfficers(); },
-    honored:             function () { setContent(renderHonored(window._D)); wireHonored(); },
-    departments:         function () { setContent(renderDepartments(window._D)); wireDepts(); },
+    settings:            function () { setContent(renderSettings(_D)); },
+    activity:            function () { setContent(renderActivity(_D)); wireActivity(); },
+    officers:            function () { setContent(renderOfficers(_D)); wireOfficers(); },
+    honored:             function () { setContent(renderHonored(_D)); wireHonored(); },
+    departments:         function () { setContent(renderDepartments(_D)); wireDepts(); },
     weekly:              function () {
-        setContent(renderEvents(window._D.weeklyEvents,
+        setContent(renderEvents(_D.weeklyEvents,
             ['Username', 'Date', 'Event Type', 'AP Value', 'OP Value', 'Attendees'], 'Weekly Events'));
     },
     monthly:             function () {
-        setContent(renderEvents(window._D.monthlyEvents,
+        setContent(renderEvents(_D.monthlyEvents,
             ['Username', 'Date', 'Event Type', 'AP Value', 'OP Value', 'Attendees'], 'Monthly Events'));
     },
     'form-eventlog':     renderFormEventLog,
@@ -217,7 +236,6 @@ function go(key, el) {
     if (el) el.classList.add('active');
     document.getElementById('main').scrollTop = 0;
     document.getElementById('sidebar').classList.remove('open');
-    actFilter = 'all';
     if (PAGES[key]) PAGES[key]();
 }
 
@@ -227,51 +245,48 @@ function toggleSidebar() {
 
 // ── Rank-based nav visibility ─────────────────────────────────
 function updateNavAccess() {
-    var u = window.AUTH.user;
+    var u = AUTH.user;
     if (!u) return;
     var inGroup    = u.divisionRank > 0;
     var canOfficer = u.divisionRank >= 235 || u.ghostRank >= 7;
 
-    // Officer-only forms
     ['form-eventlog', 'form-editeventlog'].forEach(function (key) {
         var item = document.querySelector('.nav-item[data-key="' + key + '"]');
         if (item) item.style.display = (inGroup && canOfficer) ? '' : 'none';
     });
-    // All forms hidden if not in group
     ['form-eventlog', 'form-editeventlog', 'form-transfer', 'form-exemption', 'form-missingap'].forEach(function (key) {
         var item = document.querySelector('.nav-item[data-key="' + key + '"]');
         if (item && !inGroup) item.style.display = 'none';
     });
-    // Rank in sidebar
     var rankEl = document.getElementById('sidebar-rank');
     if (rankEl) rankEl.textContent = u.divisionRoleName;
 }
 
 // ── Search wire-up ────────────────────────────────────────────
 function wireActivity() {
-    renderActivityRows(window._D.activity.members);
+    renderActivityRows(_D.activity.members);
     var inp = document.getElementById('act-search');
     if (!inp) return;
-    inp.addEventListener('input', debounce(function () { renderActivityRows(window._D.activity.members); }, 160));
+    inp.addEventListener('input', debounce(function () { renderActivityRows(_D.activity.members); }, 160));
 }
 function wireOfficers() {
-    renderOfficerRows(window._D.officers.officers);
+    renderOfficerRows(_D.officers.officers);
     var inp = document.getElementById('off-search');
     if (!inp) return;
-    inp.addEventListener('input', debounce(function () { renderOfficerRows(window._D.officers.officers); }, 160));
+    inp.addEventListener('input', debounce(function () { renderOfficerRows(_D.officers.officers); }, 160));
 }
 function wireHonored() {
-    renderHonoredRows(window._D.honored.members);
+    renderHonoredRows(_D.honored.members);
     var inp = document.getElementById('hon-search');
     if (!inp) return;
-    inp.addEventListener('input', debounce(function () { renderHonoredRows(window._D.honored.members); }, 160));
+    inp.addEventListener('input', debounce(function () { renderHonoredRows(_D.honored.members); }, 160));
 }
 function wireDepts() {
     var inp = document.getElementById('dept-search');
     if (!inp) return;
     inp.addEventListener('input', debounce(function () {
         var grid = document.getElementById('dept-grid');
-        if (grid) grid.innerHTML = buildDeptBlocks(window._D.departments, inp.value.toLowerCase());
+        if (grid) grid.innerHTML = buildDeptBlocks(_D.departments, inp.value.toLowerCase());
     }, 160));
 }
 
@@ -280,7 +295,7 @@ function refreshData() {
     var btn = document.getElementById('refresh-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
     API.refreshAllData().then(function (d) {
-        window._D = d;
+        _D = d;
         toast('Data refreshed', 'success');
         if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
         var active = document.querySelector('.nav-item.active');
@@ -293,7 +308,7 @@ function refreshData() {
 
 // ── Profile card ──────────────────────────────────────────────
 function populateProfileCard() {
-    var u = window.AUTH.user; if (!u) return;
+    var u = AUTH.user; if (!u) return;
     var nameEl = document.getElementById('profile-name');
     var rankEl = document.getElementById('profile-rank');
     var card   = document.getElementById('profile-card');
@@ -305,15 +320,140 @@ function populateProfileCard() {
 }
 
 // ── Global event delegation ───────────────────────────────────
+// _AC_ALLOWLIST + _AC_HANDLERS replace the old window[fn] pattern,
+// ensuring only explicitly registered functions can be dispatched
+// from autocomplete data-fn attributes.
+
+var _AC_ALLOWLIST = {
+    pickELHost: true,  addELAtt: true,   removeELAtt: true,
+    pickEELHost: true, addEELAtt: true,  removeEELAtt: true,
+    pickEXUser: true,  pickMAUser: true, pickMAHost: true,
+    pickAdminOfficerAdd: true, pickAdminOfficerRm: true
+};
+
+var _AC_HANDLERS = {
+    pickELHost:          pickELHost,
+    addELAtt:            addELAtt,
+    removeELAtt:         removeELAtt,
+    pickEELHost:         pickEELHost,
+    addEELAtt:           addEELAtt,
+    removeEELAtt:        removeEELAtt,
+    pickEXUser:          pickEXUser,
+    pickMAUser:          pickMAUser,
+    pickMAHost:          pickMAHost,
+    pickAdminOfficerAdd: pickAdminOfficerAdd,
+    pickAdminOfficerRm:  pickAdminOfficerRm
+};
+
+function _dispatch(fn, el, e) {
+    var d = el ? el.dataset : {};
+    switch (fn) {
+        // Navigation
+        case 'enterSection':    enterSection(el); break;
+        case 'doLogout':        doLogout(); break;
+        case 'showHomeScreen':  showHomeScreen(); break;
+        // Activity filter — pass members so setActFilter doesn't need window._D
+        case 'setActFilter':    if (_D) setActFilter(d.filter, el, _D.activity.members); break;
+        // Objectives
+        case 'objGo':           objGo(el); break;
+        // DIS nav
+        case 'disNavGo':        disNavGo(el); break;
+        // Admin tabs
+        case 'adminTab':        adminTab(d.key); break;
+        // Admin officers
+        case 'adminAddOfficer':    adminAddOfficer(); break;
+        case 'adminRemoveOfficer': adminRemoveOfficer(); break;
+        // Admin perms
+        case 'adminPermToggle': adminPermToggle(el); break;
+        // Admin roles
+        case 'adminShowNewRole':    adminShowNewRole(); break;
+        case 'adminSaveNewRole':    adminSaveNewRole(); break;
+        case 'adminCancelNewRole':  adminCancelNewRole(); break;
+        case 'adminSaveRole':       adminSaveRole(d.id); break;
+        case 'adminCancelEditRole': adminCancelEditRole(d.id); break;
+        case 'adminEditRole':       adminEditRole(d.id); break;
+        case 'adminDeleteRole':     adminDeleteRole(d.id); break;
+        // Admin users
+        case 'adminAddUser':        adminAddUser(); break;
+        case 'adminRemoveUser':     adminRemoveUser(d.id); break;
+        case 'adminToggleUserRole': adminToggleUserRole(el, d.id); break;
+        // Forms — Event Log
+        case 'resetEL':  resetEL(); break;
+        case 'submitEL': submitEL(); break;
+        // Forms — Edit Event Log
+        case 'lookupEELEvent': lookupEELEvent(); break;
+        case 'eelFieldChange': eelFieldChange(); break;
+        case 'resetEEL':       resetEEL(); break;
+        case 'submitEEL':      submitEEL(); break;
+        // Forms — Stats Transfer
+        case 'trTypeChange': trTypeChange(); break;
+        case 'resetTR':      resetTR(); break;
+        case 'submitTR':     submitTR(); break;
+        // Forms — Exemption
+        case 'calcExDays':     calcExDays(); break;
+        case 'toggleExDeptDD': toggleExDeptDD(); break;
+        case 'toggleExDept':   toggleExDept(d.dept); break;
+        case 'exTagRemove':    e.preventDefault(); e.stopPropagation(); toggleExDept(d.dept); break;
+        case 'resetEX':        resetEX(); break;
+        case 'submitEX':       submitEX(); break;
+        // Forms — Missing AP
+        case 'resetMA':  resetMA(); break;
+        case 'submitMA': submitMA(); break;
+        // Autocomplete select — allowlisted explicit handler map (no window[fn])
+        case 'acSelect': {
+            var fn2 = d.fn;
+            if (_AC_ALLOWLIST[fn2] && _AC_HANDLERS[fn2]) _AC_HANDLERS[fn2](d.val);
+            break;
+        }
+        case 'acRemove': {
+            e.preventDefault();
+            var fn3 = d.fn;
+            if (_AC_ALLOWLIST[fn3] && _AC_HANDLERS[fn3]) _AC_HANDLERS[fn3](d.val);
+            break;
+        }
+        // DIS
+        case 'openGame': {
+            if (d.gameId && /^\d+$/.test(d.gameId)) {
+                open('https://www.roblox.com/games/' + d.gameId, '_blank', 'noopener,noreferrer');
+            }
+            break;
+        }
+        case 'disTriggerSync':         disTriggerSync(); break;
+        case 'disSetGlobalMultiplier': disSetGlobalMultiplier(); break;
+        case 'disAdvanceWeek':         disAdvanceWeek(); break;
+        case 'disAdvanceMonth':        disAdvanceMonth(); break;
+        case 'disResetWeek':           disResetWeek(); break;
+        case 'disRegenerateBoard':     disRegenerateBoard(); break;
+        case 'disSetTileEventType':    disSetTileEventType(+d.pos); break;
+        case 'disSetTilePoints':       disSetTilePoints(+d.pos); break;
+        case 'disUnlockTile':          disUnlockTile(+d.pos); break;
+        case 'disLockTile':            disLockTile(+d.pos); break;
+        case 'disForceClaim':          disForceClaim(+d.pos); break;
+        case 'disAdjustPoints':        disAdjustPoints(); break;
+        case 'disAdjustRaffle':        disAdjustRaffle(); break;
+        case 'disRunRaffle':           disRunRaffle(); break;
+        case 'disAddGame':             disAddGame(); break;
+        case 'disEditGame':            disEditGame(+d.idx); break;
+        case 'disRemoveGame':          disRemoveGame(+d.idx); break;
+    }
+}
+
 document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-click]');
-    if (!el) return;
-    var fn = el.dataset.click;
-    if (fn === 'enterSection')  enterSection(el);
-    else if (fn === 'doLogout') doLogout();
-    else if (fn === 'showHomeScreen') showHomeScreen();
-    else if (typeof window[fn] === 'function') window[fn](el);
+    if (el) _dispatch(el.dataset.click, el, e);
 });
+document.addEventListener('change', function (e) {
+    var el = e.target.closest('[data-change]');
+    if (el) _dispatch(el.dataset.change, el, e);
+});
+document.addEventListener('mousedown', function (e) {
+    var el = e.target.closest('[data-mousedown]');
+    if (el) _dispatch(el.dataset.mousedown, el, e);
+});
+document.addEventListener('focus', function (e) {
+    var el = e.target.closest('[data-focus]');
+    if (el) _dispatch(el.dataset.focus, el, e);
+}, true);
 
 // ── Static DOM wiring ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
@@ -322,30 +462,26 @@ document.addEventListener('DOMContentLoaded', function () {
     var refreshBtn = document.getElementById('refresh-btn');
     if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
     var logoutBtn = document.getElementById('sidebar-logout');
-    if (logoutBtn) logoutBtn.addEventListener('click', function () { window.AUTH.logout(); });
+    if (logoutBtn) logoutBtn.addEventListener('click', function () { AUTH.logout(); });
     document.querySelectorAll('.nav-item').forEach(function (item) {
         item.addEventListener('click', function () { go(item.dataset.key, item); });
     });
 });
 
 // ── Quick link — ?link=<section|form-key> ─────────────────────
-// Detect once on load; consumed after first use.
 var _quickLink = (function () {
     try {
-        return new URLSearchParams(window.location.search).get('link') || null;
+        return new URLSearchParams(location.search).get('link') || null;
     } catch (_) { return null; }
 })();
 
-// When a mainframe form is requested via quick link, stash the page key here
-// so loadMainframe() navigates there once data is ready.
 var _pendingPage = null;
 
 function _handleQuickLink() {
     if (!_quickLink) return;
     var link = _quickLink;
-    _quickLink = null; // consume
+    _quickLink = null;
 
-    // Mainframe section pages — enter mainframe, then navigate to the page
     var mfPages = ['form-eventlog', 'form-editeventlog', 'form-transfer', 'form-exemption', 'form-missingap',
                    'settings', 'activity', 'officers', 'honored', 'departments', 'weekly', 'monthly'];
     if (mfPages.indexOf(link) !== -1) {
@@ -353,7 +489,6 @@ function _handleQuickLink() {
         enterMainframe();
         return;
     }
-    // Top-level sections — enterX functions already enforce access checks
     if (link === 'mainframe')      { enterMainframe(); return; }
     if (link === 'div-objectives') { enterObjectives(); return; }
     if (link === 'deployment')     { enterDIS(); return; }
@@ -362,12 +497,12 @@ function _handleQuickLink() {
 
 // ── Load mainframe data ───────────────────────────────────────
 function loadMainframe() {
-    if (window._D) {
+    if (_D) {
         updateNavAccess();
         populateProfileCard();
         var pageKey = _pendingPage || 'settings';
         _pendingPage = null;
-        if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(window._D)); }
+        if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(_D)); }
         return;
     }
     var ls = document.getElementById('loading-status');
@@ -377,13 +512,13 @@ function loadMainframe() {
 
     Promise.all([API.getAllData(), API.getGroupMembers()])
         .then(function (results) {
-            window._D = results[0];
+            _D = results[0];
             setMembers(results[1] || []);
             updateNavAccess();
             populateProfileCard();
             var pageKey = _pendingPage || 'settings';
             _pendingPage = null;
-            if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(window._D)); }
+            if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(_D)); }
             var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
@@ -394,34 +529,23 @@ function loadMainframe() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────
-(function boot() {
-    if (!window.SCRIPT_URL || window.SCRIPT_URL.indexOf('YOUR_DEPLOYMENT_ID_HERE') !== -1) {
-        document.getElementById('loading').classList.add('hidden');
-        setContent('<div class="setup-wrap"><div class="ph"><div class="ey">Setup Required</div><h1>Set Your Script URL</h1><div class="sub">Edit config.js and set your Apps Script /exec URL.</div></div></div>');
-        return;
+Promise.all([
+    AUTH.load(),
+    API.checkVersion()
+]).then(function (results) {
+    var user = results[0];
+    document.getElementById('loading').classList.add('hidden');
+    if (!user) {
+        document.getElementById('login-screen').classList.remove('hidden');
+    } else {
+        AUTH.loadAdminPerms().then(function () {
+            document.getElementById('home-screen').classList.remove('hidden');
+            if (_quickLink) {
+                renderHomeScreen();
+                _handleQuickLink();
+            } else {
+                renderHomeScreen();
+            }
+        });
     }
-    // Run version check and session load in parallel.
-    // checkVersion() busts stale localStorage caches before any data is read,
-    // so users automatically get fresh data after a new deployment.
-    Promise.all([
-        window.AUTH.load(),
-        API.checkVersion()
-    ]).then(function (results) {
-        var user = results[0];
-        document.getElementById('loading').classList.add('hidden');
-        if (!user) {
-            document.getElementById('login-screen').classList.remove('hidden');
-        } else {
-            // Load admin perms in parallel, then show home screen (or quick link target)
-            window.AUTH.loadAdminPerms().then(function () {
-                document.getElementById('home-screen').classList.remove('hidden');
-                if (_quickLink) {
-                    renderHomeScreen();
-                    _handleQuickLink();
-                } else {
-                    renderHomeScreen();
-                }
-            });
-        }
-    });
-})();
+});

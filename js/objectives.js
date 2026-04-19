@@ -4,25 +4,24 @@
 //  sidebar nav + overview + per-department task cards
 // ═══════════════════════════════════════════════════════════════
 
-'use strict';
+import { esc } from './utils.js';
 
 // ── Cache (1 hour, stored in localStorage) ───────────────────
 var _OBJ_CACHE_KEY = 'obj:data';
 var _OBJ_CACHE_TTL = 60 * 60 * 1000;
 var _objMemCache   = null;
 var _objMemExp     = 0;
-var _objData       = null;    // loaded data
-var _objView       = 'overview'; // 'overview' | dept name
+var _objData       = null;
+var _objView       = 'overview';
 
 // ── Entry point ───────────────────────────────────────────────
-function renderObjectivesSection() {
+export function renderObjectivesSection() {
     _objView = 'overview';
     var hs = document.getElementById('home-screen');
     if (!hs) return;
 
     var cached = _objCacheGet();
     if (cached) {
-        // Instant path — paint immediately, no loading screen needed
         _objData = cached;
         hs.className = 'obj-mode';
         hs.removeAttribute('style');
@@ -32,7 +31,6 @@ function renderObjectivesSection() {
         return;
     }
 
-    // Show global loading overlay while fetching
     var loadDiv = document.getElementById('loading');
     if (loadDiv) loadDiv.classList.remove('hidden');
     hs.className = 'obj-mode';
@@ -70,13 +68,7 @@ function _objShellHTML() {
 
 // ── Data fetch + cache ────────────────────────────────────────
 function _objFetch(onDone) {
-    var url = window.OBJECTIVES_URL;
-    if (!url || url.indexOf('YOUR_') !== -1) {
-        if (onDone) onDone();
-        _objSetContent('<div class="empty-state">OBJECTIVES_URL not configured in config.js.</div>');
-        return;
-    }
-    fetch(url + '?action=api', { redirect: 'follow' })
+    fetch('/api/objectives/data', { credentials: 'same-origin', cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (json) {
             if (!json.success) throw new Error(json.error || 'Unknown error');
@@ -124,7 +116,7 @@ function _objBuildNav() {
 }
 
 // ── Navigation ────────────────────────────────────────────────
-function objGo(el) {
+export function objGo(el) {
     var key = el && el.dataset ? el.dataset.objkey : el;
     document.querySelectorAll('.obj-nav-item').forEach(function (n) { n.classList.remove('active'); });
     if (el && el.classList) el.classList.add('active');

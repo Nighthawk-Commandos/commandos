@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 — Nighthawk Commandos</title>
+    <link rel="icon" href="https://i.imgur.com/YA7Ilep.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:     #0a0a0f;
+            --surface:#111118;
+            --border: #1e1e2e;
+            --accent: #7c4ab8;
+            --red:    #c0392b;
+            --text:   #e8e8f0;
+            --muted:  #6b6b80;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Syne', sans-serif;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            padding: 24px;
+        }
+
+        /* grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(124,74,184,.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(124,74,184,.06) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            max-width: 560px;
+            width: 100%;
+        }
+
+        .eyebrow {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 16px;
+        }
+
+        .code {
+            font-size: clamp(96px, 22vw, 160px);
+            font-weight: 800;
+            line-height: 1;
+            /* red-to-purple gradient matching the accent colours */
+            background: linear-gradient(135deg, var(--red) 0%, var(--accent) 60%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            user-select: none;
+            letter-spacing: -.02em;
+        }
+
+        .title {
+            font-size: clamp(20px, 5vw, 28px);
+            font-weight: 700;
+            margin-top: 12px;
+            margin-bottom: 8px;
+        }
+
+        .flavour {
+            font-size: 14px;
+            color: var(--muted);
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+
+        .flavour strong {
+            color: var(--text);
+        }
+
+        .divider {
+            width: 48px;
+            height: 2px;
+            background: var(--accent);
+            margin: 0 auto 28px;
+            border-radius: 2px;
+        }
+
+        /* meme terminal block */
+        .terminal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            text-align: left;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 32px;
+            line-height: 1.8;
+        }
+
+        .terminal .prompt { color: var(--accent); }
+        .terminal .ok     { color: #27ae60; }
+        .terminal .err    { color: var(--red); }
+
+        .btn-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 24px;
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: opacity .15s;
+            letter-spacing: .02em;
+        }
+        .btn-home:hover { opacity: .85; }
+
+        .footer-note {
+            margin-top: 40px;
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: .06em;
+        }
+    </style>
+</head>
+<body>
+
+<div class="wrap">
+
+    <div class="eyebrow">Nighthawk Commandos &mdash; Mainframe</div>
+
+    <div class="code">404</div>
+
+    <div class="title">Page Not Found</div>
+
+    <div class="flavour">
+        Trooper, you've gone completely off-map.<br>
+        <strong>This URL does not exist.</strong> We checked.
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="terminal">
+        <div><span class="prompt">$</span> resolve-path --target <em>this-url</em></div>
+        <div><span class="err">ERROR</span> &nbsp;Path does not exist in the mainframe</div>
+        <div><span class="err">ERROR</span> &nbsp;No matching route found</div>
+        <div><span class="prompt">$</span> suggest-action</div>
+        <div><span class="ok">RESULT</span> &nbsp;Return to base. Immediately.</div>
+    </div>
+
+    <a class="btn-home" href="/">&#8592; Return to Base</a>
+
+    <div class="footer-note">The Nighthawk Imperium &mdash; Nighthawk Commandos Division</div>
+
+</div>
+
+</body>
+</html>

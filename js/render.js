@@ -2,171 +2,32 @@
 //  render.js — read-only page renderers + shared DOM helpers
 // ═══════════════════════════════════════════════════════════════
 
-'use strict';
+import { AUTH } from './auth.js';
+import { API  } from './api.js';
+import { adminRenderDisTab } from './dis.js';
+import {
+    RANK_CLASSES, DEPT_CLASSES, DEPT_COLOURS, MEDAL_CLASSES,
+    $, gv, sv, setHTML,
+    esc, ea, fmt2, fmtPct, setToday, debounce,
+    toast, btnBusy, btnDone, cooldown,
+    pageHeader, statCard, kvRow, flagBadge, statusBadge,
+    rankPill, deptPill, deptPills, filterBtn, noResults, evTypeOpts,
+    fld, fHead, honeypot, setFieldErr, clrFieldErr, clrAll
+} from './utils.js';
 
-// ── CSS class maps (colours live in styles.css) ───────────────
-var RANK_CLASSES = {
-    'Probationary Trooper':'rk-prob','Commando':'rk-commando','Sentinel':'rk-sentinel',
-    'Infiltrator':'rk-infiltrator','Operative':'rk-operative','Specialist':'rk-specialist',
-    'Prestige':'rk-prestige','Nighthawk Nine':'rk-nighthawk',
-    'Interim Warrant Officer':'rk-iwo','Warrant Officer':'rk-wo',
-    'Chief Warrant Officer':'rk-cwo','Captain':'rk-captain',
-    'Commandant':'rk-commandant','Developer':'rk-developer','Advisor':'rk-advisor',
-    'Deputy Director':'rk-dd','Director':'rk-director'
+// Re-export utils so callers can get them from render.js (backwards compat)
+export {
+    RANK_CLASSES, DEPT_CLASSES, DEPT_COLOURS, MEDAL_CLASSES,
+    $, gv, sv, setHTML,
+    esc, ea, fmt2, fmtPct, setToday, debounce,
+    toast, btnBusy, btnDone, cooldown,
+    pageHeader, statCard, kvRow, flagBadge, statusBadge,
+    rankPill, deptPill, deptPills, filterBtn, noResults, evTypeOpts,
+    fld, fHead, honeypot, setFieldErr, clrFieldErr, clrAll
 };
-var DEPT_CLASSES = {
-    'GHOSTS':'dp-ghosts','PROGRESSION':'dp-prog','WELFARE':'dp-welfare',
-    'INTERNAL AFFAIRS':'dp-ia','LIBRARIUM':'dp-lib',
-    'Ghosts':'dp-ghosts','Progression':'dp-prog','Welfare':'dp-welfare',
-    'Internal Affairs':'dp-ia','Librarium':'dp-lib'
-};
-// Department colours mirror the CSS dept-head-name colours
-var DEPT_COLOURS = {
-    'GHOSTS':'#674EA7','Ghosts':'#674EA7',
-    'PROGRESSION':'#3D85C6','Progression':'#3D85C6',
-    'WELFARE':'#A64D79','Welfare':'#A64D79',
-    'INTERNAL AFFAIRS':'#434343','Internal Affairs':'#434343',
-    'LIBRARIUM':'#F1C232','Librarium':'#F1C232'
-};
-var MEDAL_CLASSES = {
-    'Legend':'md-legend','Cheerleader':'md-cheerleader',
-    'Distinguished Officer':'md-dist-officer',
-    "Commandant's Excellence":'md-cmd-exc',
-    "Advisor's Honor":'md-adv-honor',
-    "Deputy Director's Valor":'md-dd-valor',
-    "Director's Merit":'md-dir-merit',
-    "Director-General's Virtue":'md-dg-virtue'
-};
-
-// ── DOM shorthand ─────────────────────────────────────────────
-function $(id)       { return document.getElementById(id); }
-function gv(id)      { var el=$(id); return el ? el.value : ''; }
-function sv(id, v)   { var el=$(id); if (el) el.value = v; }
-function setHTML(id, html) { var el=$(id); if (el) el.innerHTML = html; }
-
-function esc(s) {
-    if (s === null || s === undefined) return '';
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function ea(s) {  // escape for inline JS attribute string
-    if (!s) return '';
-    return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-}
-function fmt2(v) {
-    var n = parseFloat(v);
-    if (isNaN(n)) return esc(String(v));
-    return n % 1 === 0 ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
-}
-function fmtPct(v) {
-    if (v === null || v === undefined) return '—';
-
-    var n = parseFloat(v);
-    if (isNaN(n)) return esc(String(v));
-
-    return (n * 100).toFixed(2) + '%';
-}
-function setToday(id) {
-    var el = $(id); if (!el) return;
-    var t = new Date();
-    el.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
-}
-
-// ── Toast ─────────────────────────────────────────────────────
-var _toastTimer = null;
-function toast(msg, type) {
-    var t = $('toast'); if (!t) return;
-    if (_toastTimer) clearTimeout(_toastTimer);
-    t.textContent = msg;
-    t.className = 'toast toast-' + (type || 'success') + ' show';
-    _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 4000);
-}
-
-// ── Button state helpers ──────────────────────────────────────
-function btnBusy(id, label) { var b=$(id); if(b){b.disabled=true; b.textContent=label||'Loading…';} }
-function btnDone(id, label) { var b=$(id); if(b){b.disabled=false; b.textContent=label;} }
-
-// ── Cooldown bar ──────────────────────────────────────────────
-var _cdTimer = null;
-function cooldown(btnId, wrapId, barId, secs) {
-    var btn=$(btnId), wrap=$(wrapId), bar=$(barId);
-    if (!btn) return;
-    btn.disabled = true;
-    if (wrap) { wrap.style.display='block'; if(bar) bar.style.width='100%'; }
-    var rem = secs, orig = btn.textContent;
-    btn.textContent = 'Wait ' + rem + 's…';
-    if (_cdTimer) clearInterval(_cdTimer);
-    _cdTimer = setInterval(function () {
-        rem--;
-        if (bar) bar.style.width = (rem / secs * 100) + '%';
-        btn.textContent = 'Wait ' + rem + 's…';
-        if (rem <= 0) {
-            clearInterval(_cdTimer);
-            btn.disabled = false;
-            btn.textContent = orig;
-            if (wrap) wrap.style.display = 'none';
-        }
-    }, 1000);
-}
-
-// ── Shared template builders ──────────────────────────────────
-function pageHeader(title, sub) {
-    return '<div class="ph"><div class="ey">Nighthawk Commandos Mainframe</div><h1>' + esc(title) + '</h1>' +
-        (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
-}
-function statCard(n, label) {
-    return '<div class="sc"><div class="n">' + esc(String(n)) + '</div><div class="l">' + esc(label) + '</div></div>';
-}
-function kvRow(k, v) {
-    var kH = (typeof k === 'string' && k.charAt(0) === '<') ? k : esc(String(k));
-    var vH = (typeof v === 'string' && v.charAt(0) === '<') ? v : esc(String(v));
-    return '<div class="kv"><span class="k">' + kH + '</span><span class="v">' + vH + '</span></div>';
-}
-function flagBadge(on) {
-    return on ? '<span class="flag flag-on">Enabled</span>' : '<span class="flag flag-off">Disabled</span>';
-}
-function statusBadge(s) {
-    var cls = {Constant:'b-constant',Complete:'b-complete',Exempt:'b-exempt',Incomplete:'b-incomplete'};
-    return '<span class="badge ' + (cls[s]||'b-incomplete') + '">' + esc(s||'—') + '</span>';
-}
-function rankPill(r) {
-    if (!r) return '<span class="muted-val">—</span>';
-    var cls = RANK_CLASSES[r];
-    if (!cls) return '<span class="rank-plain">' + esc(r) + '</span>';
-    return '<span class="rank-pill ' + cls + '">' + esc(r) + '</span>';
-}
-function deptPill(n) {
-    if (!n) return '';
-    var cls = DEPT_CLASSES[n] || DEPT_CLASSES[n.toUpperCase()];
-    if (!cls) return '<span class="rank-plain">' + esc(n) + '</span>';
-    return '<span class="dept-pill ' + cls + '">' + esc(n) + '</span>';
-}
-function deptPills(s) {
-    if (!s) return '<span class="muted-val">—</span>';
-    return s.split(',').map(function(d){return deptPill(d.trim());}).join(' ');
-}
-function filterBtn(id, f, label, on) {
-    return '<button class="filter-btn' + (on?' on':'') + '" id="' + id + '" onclick="setActFilter(\'' + f + '\',this)">' + label + '</button>';
-}
-function noResults(cols) {
-    return '<tr><td colspan="' + cols + '" class="no-results">No results</td></tr>';
-}
-function evTypeOpts() {
-    return ['Raid/Defense WIN','Raid/Defense LOSS','Tryout','Practice Raid','Spar','Border Patrol','Game Night','Welfare Event']
-        .map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join('');
-}
-
-// ── Debounce ──────────────────────────────────────────────────
-function debounce(fn, ms) {
-    var t;
-    return function() {
-        var args = arguments, ctx = this;
-        clearTimeout(t);
-        t = setTimeout(function(){ fn.apply(ctx, args); }, ms);
-    };
-}
 
 // ── Settings ──────────────────────────────────────────────────
-function renderSettings(D) {
+export function renderSettings(D) {
     var s = D.settings;
     var h = pageHeader('Settings', s.quotaWeek ? 'Quota Week of ' + s.quotaWeek : '');
     h += '<div class="stats">';
@@ -225,7 +86,9 @@ function renderSettings(D) {
 // ── Activity Tracker ──────────────────────────────────────────
 var actFilter = 'all';
 
-function renderActivity(D) {
+export function setContent(id, html) { setHTML(id, html); }
+
+export function renderActivity(D) {
     var a = D.activity, total = a.members.length;
     var complete   = a.members.filter(function(m){return m.status==='Complete';}).length;
     var constant   = a.members.filter(function(m){return m.status==='Constant';}).length;
@@ -253,7 +116,7 @@ function renderActivity(D) {
     return h;
 }
 
-function renderActivityRows(members) {
+export function renderActivityRows(members) {
     var q = (gv('act-search')||'').toLowerCase();
     var filtered = members.filter(function(m){
         return (actFilter==='all' || m.status===actFilter) &&
@@ -264,7 +127,6 @@ function renderActivityRows(members) {
     var cnt = $('act-count');
     if (cnt) cnt.textContent = filtered.length + ' member' + (filtered.length===1?'':'s');
 
-    // Build rows as a single string for one innerHTML write
     var buf = [];
     for (var i=0; i<filtered.length; i++) {
         var m = filtered[i];
@@ -281,15 +143,16 @@ function renderActivityRows(members) {
     if (tbody) tbody.innerHTML = buf.length ? buf.join('') : noResults(12);
 }
 
-function setActFilter(f, btn) {
+// members param passed from _dispatch in app.js — no window._D access
+export function setActFilter(f, btn, members) {
     actFilter = f;
     document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    renderActivityRows(window._D.activity.members);
+    renderActivityRows(members);
 }
 
 // ── Officer Tracker ───────────────────────────────────────────
-function renderOfficers(D) {
+export function renderOfficers(D) {
     var o = D.officers, total = o.officers.length;
     var constant   = o.officers.filter(function(m){return m.status==='Constant';}).length;
     var exempt     = o.officers.filter(function(m){return m.status==='Exempt';}).length;
@@ -308,7 +171,7 @@ function renderOfficers(D) {
     return h;
 }
 
-function renderOfficerRows(officers) {
+export function renderOfficerRows(officers) {
     var q = (gv('off-search')||'').toLowerCase();
     var filtered = officers.filter(function(o){
         return !q || o.username.toLowerCase().indexOf(q)>-1 || (o.rank||'').toLowerCase().indexOf(q)>-1;
@@ -332,7 +195,7 @@ function renderOfficerRows(officers) {
 }
 
 // ── Honored Tracker ───────────────────────────────────────────
-function renderHonored(D) {
+export function renderHonored(D) {
     var hon = D.honored;
     var h = pageHeader('Honored Tracker','');
     if (hon.disclaimer) {
@@ -352,7 +215,7 @@ function renderHonored(D) {
     return h;
 }
 
-function renderHonoredRows(members) {
+export function renderHonoredRows(members) {
     var q = (gv('hon-search')||'').toLowerCase();
     var filtered = members.filter(function(m){return !q || m.username.toLowerCase().indexOf(q)>-1;});
     var cnt = $('hon-count');
@@ -377,7 +240,7 @@ function renderHonoredRows(members) {
 }
 
 // ── Departments ───────────────────────────────────────────────
-function renderDepartments(D) {
+export function renderDepartments(D) {
     var depts = D.departments;
     var h = pageHeader('Department Members','');
     h += '<div class="stats">';
@@ -388,7 +251,7 @@ function renderDepartments(D) {
     return h;
 }
 
-function buildDeptBlocks(depts, q) {
+export function buildDeptBlocks(depts, q) {
     var buf = [];
     for (var i=0; i<depts.length; i++) {
         var dept = depts[i];
@@ -408,7 +271,7 @@ function buildDeptBlocks(depts, q) {
 }
 
 // ── Events ────────────────────────────────────────────────────
-function renderEvents(ev, cols, title) {
+export function renderEvents(ev, cols, title) {
     var h = pageHeader(title,'') + '<div class="stats">'+statCard(ev.total||ev.events.length,'Total Events')+'</div>';
     if (!ev.events.length) { return h + '<div class="empty">No events recorded yet for this period.</div>'; }
     h += '<div class="tbl-wrap"><table><thead><tr>';
@@ -424,12 +287,12 @@ function renderEvents(ev, cols, title) {
 // ── Autocomplete ──────────────────────────────────────────────
 var GROUP_MEMBERS = [];
 
-function setMembers(members) { GROUP_MEMBERS = members || []; }
+export function setMembers(members) { GROUP_MEMBERS = members || []; }
 
-function openAC(id)  { var d=$(id); if(d) d.classList.add('open'); }
-function closeAC(id) { var d=$(id); if(d) d.classList.remove('open'); }
+export function openAC(id)  { var d=$(id); if(d) d.classList.add('open'); }
+export function closeAC(id) { var d=$(id); if(d) d.classList.remove('open'); }
 
-function buildAC(ddId, query, exclude, onSel) {
+export function buildAC(ddId, query, exclude, onSel) {
     var q = (query||'').toLowerCase();
     if (!q) { closeAC(ddId); return; }
     var matches = [];
@@ -440,12 +303,12 @@ function buildAC(ddId, query, exclude, onSel) {
     var dd = $(ddId); if (!dd) return;
     if (!matches.length) { closeAC(ddId); return; }
     dd.innerHTML = matches.map(function(m){
-        return '<div class="ac-option" onmousedown="'+onSel+'(\''+ea(m)+'\')">'+esc(m)+'</div>';
+        return '<div class="ac-option" data-mousedown="acSelect" data-fn="'+onSel+'" data-val="'+ea(m)+'">'+esc(m)+'</div>';
     }).join('');
     openAC(ddId);
 }
 
-function initSingleAC(inpId, ddId, onSel) {
+export function initSingleAC(inpId, ddId, onSel) {
     var inp = $(inpId); if (!inp) return;
     var debouncedBuild = debounce(function(){ buildAC(ddId, inp.value, [], onSel); }, 120);
     inp.addEventListener('input', debouncedBuild);
@@ -453,7 +316,8 @@ function initSingleAC(inpId, ddId, onSel) {
     inp.addEventListener('focus', function(){ if(inp.value.trim()) buildAC(ddId, inp.value, [], onSel); });
 }
 
-function initMultiAC(inpId, ddId, areaId, getSel, onSel) {
+// removeFn replaces old window[onSel.replace('add','remove')] pattern
+export function initMultiAC(inpId, ddId, areaId, getSel, onSel, removeFn) {
     var inp = $(inpId), area = $(areaId); if (!inp||!area) return;
     area.addEventListener('click', function(){ inp.focus(); });
     inp.addEventListener('focus', function(){ area.classList.add('focused'); });
@@ -464,26 +328,25 @@ function initMultiAC(inpId, ddId, areaId, getSel, onSel) {
         if (e.key==='Escape') closeAC(ddId);
         if (e.key==='Backspace' && !inp.value) {
             var sel = getSel();
-            if (sel.length) window[onSel.replace('add','remove')](sel[sel.length-1]);
+            if (sel.length && removeFn) removeFn(sel[sel.length-1]);
         }
     });
 }
 
-function renderTags(areaId, inpId, items, removeFn) {
+export function renderTags(areaId, inpId, items, removeFn) {
     var area=$(areaId), inp=$(inpId); if(!area||!inp) return;
     area.querySelectorAll('.tag').forEach(function(t){t.remove();});
     var frag = document.createDocumentFragment();
     items.forEach(function(name){
         var tag = document.createElement('span'); tag.className='tag';
-        tag.innerHTML = esc(name)+'<i class="tag-remove" onmousedown="event.preventDefault();'+removeFn+'(\''+ea(name)+'\')">×</i>';
+        tag.innerHTML = esc(name)+'<i class="tag-remove" data-mousedown="acRemove" data-fn="'+removeFn+'" data-val="'+ea(name)+'">×</i>';
         frag.appendChild(tag);
     });
     area.insertBefore(frag, inp);
     inp.placeholder = items.length ? 'Add more…' : 'Type to search…';
 }
 
-function docOutsideClick(pairs) {
-    // pairs: [[inputId, dropdownId], ...]
+export function docOutsideClick(pairs) {
     function handler(e) {
         var allGone = true;
         pairs.forEach(function(p){
@@ -499,9 +362,8 @@ function docOutsideClick(pairs) {
 //  Unified Admin Dashboard
 // ═══════════════════════════════════════════════════════════════
 
-window._ADMIN = { tab: null, roles: [], list: [] };
+var _ADMIN = { tab: null, roles: [], list: [] };
 
-// Permission definitions (flat list — used for pill rendering and toggle lookup)
 var ADMIN_PERM_DEFS = [
     { key: 'roleAssign',  label: 'Assign Users', superadminOnly: true  },
     { key: 'roleEdit',    label: 'Edit Roles',   superadminOnly: true  },
@@ -515,31 +377,28 @@ var ADMIN_PERM_DEFS = [
     { key: 'disAudit',    label: 'Audit',        superadminOnly: false }
 ];
 
-// Permission groups — used to render toggles in role create/edit forms
 var ADMIN_PERM_GROUPS = [
     { label: 'System',    keys: ['roleAssign', 'roleEdit'] },
     { label: 'Mainframe', keys: ['mfOfficers', 'mfRemote'] },
     { label: 'DIS',       keys: ['disSync', 'disTiles', 'disPoints', 'disRaffle', 'disGamePool', 'disAudit'] }
 ];
 
-function renderUnifiedAdmin() {
+export function renderUnifiedAdmin() {
     var hs = document.getElementById('home-screen');
     if (!hs) return;
 
-    // Determine which tabs the user can see
     var tabDefs = [
-        { key: 'roles',     label: 'Roles',     canSee: window.AUTH.canAdminTab('roles')     },
-        { key: 'mainframe', label: 'Mainframe', canSee: window.AUTH.canAdminTab('mainframe') },
-        { key: 'sync',      label: 'Sync',      canSee: window.AUTH.canAdminTab('sync')      },
-        { key: 'tiles',     label: 'Tiles',     canSee: window.AUTH.canAdminTab('tiles')     },
-        { key: 'points',    label: 'Points',    canSee: window.AUTH.canAdminTab('points')    },
-        { key: 'raffle',    label: 'Raffle',    canSee: window.AUTH.canAdminTab('raffle')    },
-        { key: 'gamepool',  label: 'Game Pool', canSee: window.AUTH.canAdminTab('gamepool')  },
-        { key: 'audit',     label: 'Audit Log', canSee: window.AUTH.canAdminTab('audit')     },
-        { key: 'errors',    label: 'Errors',    canSee: window.AUTH.canAdminTab('errors')    }
+        { key: 'roles',     label: 'Roles',     canSee: AUTH.canAdminTab('roles')     },
+        { key: 'mainframe', label: 'Mainframe', canSee: AUTH.canAdminTab('mainframe') },
+        { key: 'sync',      label: 'Sync',      canSee: AUTH.canAdminTab('sync')      },
+        { key: 'tiles',     label: 'Tiles',     canSee: AUTH.canAdminTab('tiles')     },
+        { key: 'points',    label: 'Points',    canSee: AUTH.canAdminTab('points')    },
+        { key: 'raffle',    label: 'Raffle',    canSee: AUTH.canAdminTab('raffle')    },
+        { key: 'gamepool',  label: 'Game Pool', canSee: AUTH.canAdminTab('gamepool')  },
+        { key: 'audit',     label: 'Audit Log', canSee: AUTH.canAdminTab('audit')     },
+        { key: 'errors',    label: 'Errors',    canSee: AUTH.canAdminTab('errors')    }
     ].filter(function (t) { return t.canSee; });
 
-    // Pick default tab if needed
     if (!_ADMIN.tab || !tabDefs.some(function (t) { return t.key === _ADMIN.tab; })) {
         _ADMIN.tab = tabDefs.length ? tabDefs[0].key : null;
     }
@@ -557,7 +416,7 @@ function renderUnifiedAdmin() {
 
     var navHtml = tabDefs.map(function (t) {
         return '<div class="obj-nav-item' + (_ADMIN.tab === t.key ? ' active' : '') +
-            '" data-admintab="' + esc(t.key) + '" onclick="adminTab(\'' + esc(t.key) + '\')">' +
+            '" data-admintab="' + esc(t.key) + '" data-click="adminTab" data-key="' + esc(t.key) + '">' +
             '<div class="obj-nav-dot"></div>' + esc(t.label) + '</div>';
     }).join('');
 
@@ -581,17 +440,12 @@ function renderUnifiedAdmin() {
     _adminRenderTab();
 }
 
-function adminTab(key) {
+export function adminTab(key) {
     _ADMIN.tab = key;
     document.querySelectorAll('.obj-nav-item[data-admintab]').forEach(function (el) {
         el.classList.toggle('active', el.dataset.admintab === key);
     });
     _adminRenderTab();
-}
-
-function _getAdminTabLabel(key) {
-    var map = { roles: 'Roles', mainframe: 'Mainframe', sync: 'Sync', tiles: 'Tiles', points: 'Points', raffle: 'Raffle', gamepool: 'Game Pool', audit: 'Audit Log', errors: 'Errors' };
-    return map[key] || key;
 }
 
 function _adminRenderTab() {
@@ -601,13 +455,13 @@ function _adminRenderTab() {
     if (tab === 'roles')     { _adminRenderRoles(body);     return; }
     if (tab === 'mainframe') { _adminRenderMainframe(body); return; }
     if (tab === 'errors')    { _adminRenderErrors(body);    return; }
-    _adminRenderDisTab(tab, body);
+    adminRenderDisTab(tab, body);
 }
 
 // ── Mainframe tab ─────────────────────────────────────────────
 function _adminRenderMainframe(body) {
-    var ap = window.AUTH.adminPerms || {};
-    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var ap = AUTH.adminPerms || {};
+    var isSuperadmin = !!(AUTH.user && AUTH.user.divisionRank >= 246) || !!ap.superadmin;
     var canOfficers  = isSuperadmin || !!ap.mfOfficers;
     var canRemote    = isSuperadmin || !!ap.mfRemote;
 
@@ -631,13 +485,13 @@ function _adminRenderMainframe(body) {
             '<div class="ac-wrap" style="flex:1;min-width:140px"><input class="ac-input" id="admin-mf-add-inp" placeholder="Type to search\u2026" autocomplete="off"><div class="ac-dropdown" id="admin-mf-add-dd"></div></div>' +
             '<select id="admin-mf-add-rank" class="admin-role-select" style="flex:1;min-width:160px">' +
             '<option value="">\u2014 Select rank \u2014</option>' + rankOpts + '</select>' +
-            '<button id="admin-mf-add-btn" class="btn-dis-primary" onclick="adminAddOfficer()">Add Officer</button>' +
+            '<button id="admin-mf-add-btn" class="btn-dis-primary" data-click="adminAddOfficer">Add Officer</button>' +
             '</div>' +
             '<div id="admin-mf-add-res" style="font-size:12px;min-height:18px"></div>' +
             '<div class="admin-section-title" style="margin-top:16px">Remove Officer</div>' +
             '<div class="dis-inline-form" style="flex-wrap:wrap;gap:8px;margin-bottom:4px">' +
             '<div class="ac-wrap" style="flex:1;min-width:160px"><input class="ac-input" id="admin-mf-rm-inp" placeholder="Type to search\u2026" autocomplete="off"><div class="ac-dropdown" id="admin-mf-rm-dd"></div></div>' +
-            '<button id="admin-mf-rm-btn" class="btn-dis-primary" style="background:#c0392b" onclick="adminRemoveOfficer()">Remove Officer</button>' +
+            '<button id="admin-mf-rm-btn" class="btn-dis-primary" style="background:#c0392b" data-click="adminRemoveOfficer">Remove Officer</button>' +
             '</div>' +
             '<div id="admin-mf-rm-res" style="font-size:12px;min-height:18px"></div>' +
             '</div>';
@@ -659,9 +513,6 @@ function _adminRenderMainframe(body) {
     }
 }
 
-// Wires up autocomplete on the officer add/remove inputs.
-// If GROUP_MEMBERS is empty (admin came here without loading mainframe),
-// fetch them first then init.
 function _initOfficerAC() {
     function wire() {
         initSingleAC('admin-mf-add-inp', 'admin-mf-add-dd', 'pickAdminOfficerAdd');
@@ -674,54 +525,15 @@ function _initOfficerAC() {
         API.getGroupMembers().then(function (members) {
             setMembers(members);
             wire();
-        }).catch(function () { wire(); }); // wire anyway so inputs still work
+        }).catch(function () { wire(); });
     }
 }
 
-function pickAdminOfficerAdd(name) { sv('admin-mf-add-inp', name); closeAC('admin-mf-add-dd'); }
-function pickAdminOfficerRm(name)  { sv('admin-mf-rm-inp',  name); closeAC('admin-mf-rm-dd');  }
-
-// ── DIS tab wrapper (ensures state is loaded first) ───────────
-function _adminRenderDisTab(tabKey, body) {
-    if (!_DIS.state) {
-        body.innerHTML = '<div class="obj-loading">Loading DIS state\u2026</div>';
-        fetch('/api/dis/state')
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                _DIS.state = data;
-                _adminRenderDisTabContent(tabKey, body);
-            })
-            .catch(function (e) {
-                body.innerHTML = '<div class="obj-error">Failed to load DIS state: ' + esc(e.message) + '</div>';
-            });
-        return;
-    }
-    _adminRenderDisTabContent(tabKey, body);
-}
-
-function _adminRenderDisTabContent(tabKey, body) {
-    if (tabKey === 'sync')          _disAdminSync(body);
-    else if (tabKey === 'tiles')    _disAdminTiles(body);
-    else if (tabKey === 'points')   _disAdminPoints(body);
-    else if (tabKey === 'raffle')   _disAdminRaffle(body);
-    else if (tabKey === 'gamepool') _disAdminGamePool(body);
-    else if (tabKey === 'audit')    _disAdminAudit(body);
-}
-
-// After a DIS admin action succeeds, refresh the tab content
-function _adminRefreshDisTab() {
-    var body = document.getElementById('admin-body');
-    if (!body) return;
-    fetch('/api/dis/state')
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            _DIS.state = data;
-            _adminRenderDisTabContent(_ADMIN.tab, body);
-        });
-}
+export function pickAdminOfficerAdd(name) { sv('admin-mf-add-inp', name); closeAC('admin-mf-add-dd'); }
+export function pickAdminOfficerRm(name)  { sv('admin-mf-rm-inp',  name); closeAC('admin-mf-rm-dd');  }
 
 // ── Roles tab ─────────────────────────────────────────────────
-function adminPermToggle(btn) {
+export function adminPermToggle(btn) {
     btn.classList.toggle('on');
 }
 
@@ -733,10 +545,9 @@ function _readPermToggles(container) {
     return perms;
 }
 
-// Renders grouped permission toggle buttons for create/edit forms
 function _adminRenderPermToggles(existingPerms) {
-    var ap = window.AUTH.adminPerms || {};
-    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var ap = AUTH.adminPerms || {};
+    var isSuperadmin = !!(AUTH.user && AUTH.user.divisionRank >= 246) || !!ap.superadmin;
     var defsMap = {};
     ADMIN_PERM_DEFS.forEach(function (d) { defsMap[d.key] = d; });
     var html = '';
@@ -752,7 +563,7 @@ function _adminRenderPermToggles(existingPerms) {
             var isOn = !!(existingPerms && existingPerms[k]);
             var canToggle = isSuperadmin || (k !== 'roleManager' && !!ap[k]);
             html += '<button type="button" class="admin-perm-toggle' + (isOn ? ' on' : '') + '" data-perm="' + esc(k) + '"' +
-                (canToggle ? ' onclick="adminPermToggle(this)"' : ' disabled') + '>' + esc(d.label) + '</button>';
+                (canToggle ? ' data-click="adminPermToggle"' : ' disabled') + '>' + esc(d.label) + '</button>';
         });
         html += '</div></div>';
     });
@@ -772,16 +583,15 @@ function _adminRenderRoles(body) {
 }
 
 function _adminBuildRolesUI(body, roles, list) {
-    window._ADMIN.roles = roles;
-    window._ADMIN.list  = list;
-    var ap = window.AUTH.adminPerms || {};
-    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
-    var canAssign    = isSuperadmin || !!ap.roleAssign;   // add/remove/reassign users
-    var canEditRoles = isSuperadmin || !!ap.roleEdit;     // create/edit/delete role templates
+    _ADMIN.roles = roles;
+    _ADMIN.list  = list;
+    var ap = AUTH.adminPerms || {};
+    var isSuperadmin = !!(AUTH.user && AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var canAssign    = isSuperadmin || !!ap.roleAssign;
+    var canEditRoles = isSuperadmin || !!ap.roleEdit;
 
     var html = '';
 
-    // ── Section 1: Role Templates ─────────────────────────────
     html += '<div class="admin-section-title">Role Templates</div><div class="admin-role-grid">';
 
     roles.forEach(function (role) {
@@ -793,7 +603,7 @@ function _adminBuildRolesUI(body, roles, list) {
     if (canEditRoles) {
         html += '<div class="admin-role-card" style="border-left-color:var(--border)">' +
             '<div id="admin-new-role-collapsed">' +
-            '<button class="btn-dis-primary" style="width:100%;font-size:12px" onclick="adminShowNewRole()">+ Create Role</button>' +
+            '<button class="btn-dis-primary" style="width:100%;font-size:12px" data-click="adminShowNewRole">+ Create Role</button>' +
             '</div>' +
             '<div id="admin-new-role-expanded" style="display:none" class="admin-role-edit-form">' +
             '<div class="admin-role-form-row">' +
@@ -802,14 +612,13 @@ function _adminBuildRolesUI(body, roles, list) {
             '</div>' +
             _adminRenderPermToggles({}) +
             '<div class="admin-role-form-row" style="margin-top:4px">' +
-            '<button class="btn-dis-primary" style="flex:1;font-size:12px" onclick="adminSaveNewRole()">Save Role</button>' +
-            '<button class="admin-role-btn" style="white-space:nowrap" onclick="adminCancelNewRole()">Cancel</button>' +
+            '<button class="btn-dis-primary" style="flex:1;font-size:12px" data-click="adminSaveNewRole">Save Role</button>' +
+            '<button class="admin-role-btn" style="white-space:nowrap" data-click="adminCancelNewRole">Cancel</button>' +
             '</div></div></div>';
     }
 
-    html += '</div>'; // end grid
+    html += '</div>';
 
-    // ── Section 2: Users ─────────────────────────────────────
     html += '<div class="admin-section-title" style="margin-top:28px">Assigned Users</div>';
 
     if (list.length) {
@@ -824,7 +633,7 @@ function _adminBuildRolesUI(body, roles, list) {
                 '</div>';
             if (canAssign) {
                 html += _adminRoleCheckboxesHTML(roles, assignedIds, e.discordId) +
-                    '<button class="admin-remove-btn" onclick="adminRemoveUser(\'' + ea(e.discordId) + '\')">Remove</button>';
+                    '<button class="admin-remove-btn" data-click="adminRemoveUser" data-id="' + ea(e.discordId) + '">Remove</button>';
             } else {
                 var roleNames = assignedIds.map(function (rid) {
                     var r = roles.find(function (rr) { return rr.id === rid; });
@@ -849,19 +658,18 @@ function _adminBuildRolesUI(body, roles, list) {
             '<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Roles:</label>' +
             _adminRoleCheckboxesHTML(roles, [], 'new-user') +
             '</div>' +
-            '<button class="btn-dis-primary" onclick="adminAddUser()">Add User</button></div>';
+            '<button class="btn-dis-primary" data-click="adminAddUser">Add User</button></div>';
     }
 
     body.innerHTML = html;
 }
 
-// ── Role card view HTML (injected inside the card wrapper) ────
 function _adminRoleCardViewHTML(role, enabledPerms, canManage) {
     var html = '<div class="admin-role-card-header"><div class="admin-role-name">' + esc(role.name) + '</div>';
     if (canManage) {
         html += '<div class="admin-role-actions">' +
-            '<button class="admin-role-btn" onclick="adminEditRole(\'' + esc(role.id) + '\')">Edit</button>' +
-            '<button class="admin-role-btn danger" onclick="adminDeleteRole(\'' + esc(role.id) + '\')">Delete</button>' +
+            '<button class="admin-role-btn" data-click="adminEditRole" data-id="' + esc(role.id) + '">Edit</button>' +
+            '<button class="admin-role-btn danger" data-click="adminDeleteRole" data-id="' + esc(role.id) + '">Delete</button>' +
             '</div>';
     }
     html += '</div><div class="admin-perm-pills">';
@@ -873,22 +681,20 @@ function _adminRoleCardViewHTML(role, enabledPerms, canManage) {
     return html + '</div>';
 }
 
-// ── Multi-role checkbox group helper ──────────────────────────
 function _adminRoleCheckboxesHTML(roles, selectedIds, discordId) {
     var isNew = (discordId === 'new-user');
     if (!roles.length) return '<span style="font-size:11px;color:var(--muted)">No roles defined</span>';
     var html = '<div class="admin-role-checks" id="admin-roles-' + esc(discordId) + '">';
     roles.forEach(function (r) {
         var checked = selectedIds.indexOf(r.id) > -1;
-        var onChange = isNew ? '' : ' onchange="adminToggleUserRole(this,\'' + ea(discordId) + '\')"';
+        var onChange = isNew ? '' : ' data-change="adminToggleUserRole" data-id="' + ea(discordId) + '"';
         html += '<label class="admin-role-check"><input type="checkbox" value="' + esc(r.id) + '"' +
             (checked ? ' checked' : '') + onChange + '> ' + esc(r.name) + '</label>';
     });
     return html + '</div>';
 }
 
-// ── Role card inline edit ─────────────────────────────────────
-function adminEditRole(id) {
+export function adminEditRole(id) {
     var role = (_ADMIN.roles || []).find(function (r) { return r.id === id; });
     if (!role) return;
     var card = document.getElementById('admin-role-card-' + id);
@@ -900,25 +706,25 @@ function adminEditRole(id) {
         '</div>' +
         _adminRenderPermToggles(role.permissions || {}) +
         '<div class="admin-role-form-row" style="margin-top:4px">' +
-        '<button class="btn-dis-primary" style="flex:1;font-size:12px" onclick="adminSaveRole(\'' + esc(id) + '\')">Save</button>' +
-        '<button class="admin-role-btn" style="white-space:nowrap" onclick="adminCancelEditRole(\'' + esc(id) + '\')">Cancel</button>' +
+        '<button class="btn-dis-primary" style="flex:1;font-size:12px" data-click="adminSaveRole" data-id="' + esc(id) + '">Save</button>' +
+        '<button class="admin-role-btn" style="white-space:nowrap" data-click="adminCancelEditRole" data-id="' + esc(id) + '">Cancel</button>' +
         '</div></div>';
     var colorInput = document.getElementById('admin-edit-role-color');
     if (colorInput) colorInput.addEventListener('input', function () { card.style.borderLeftColor = colorInput.value; });
 }
 
-function adminCancelEditRole(id) {
+export function adminCancelEditRole(id) {
     var role = (_ADMIN.roles || []).find(function (r) { return r.id === id; });
     if (!role) { _adminReloadRoles(); return; }
     var card = document.getElementById('admin-role-card-' + id);
     if (!card) return;
-    var ap = window.AUTH.adminPerms || {};
-    var isSuperadmin = !!(window.AUTH.user && window.AUTH.user.divisionRank >= 246) || !!ap.superadmin;
+    var ap = AUTH.adminPerms || {};
+    var isSuperadmin = !!(AUTH.user && AUTH.user.divisionRank >= 246) || !!ap.superadmin;
     var enabledPerms = ADMIN_PERM_DEFS.filter(function (d) { return role.permissions && role.permissions[d.key]; });
     card.innerHTML = _adminRoleCardViewHTML(role, enabledPerms, isSuperadmin || !!ap.roleEdit);
 }
 
-function adminSaveRole(id) {
+export function adminSaveRole(id) {
     var card = document.getElementById('admin-role-card-' + id);
     if (!card) return;
     var name  = (document.getElementById('admin-edit-role-name')  || {}).value || '';
@@ -936,7 +742,7 @@ function adminSaveRole(id) {
         }).catch(function () { toast('Request failed', 'error'); });
 }
 
-function adminDeleteRole(id) {
+export function adminDeleteRole(id) {
     if (!confirm('Delete this role? Users assigned to it will lose their permissions.')) return;
     fetch('/api/admin/roles', {
         method: 'DELETE', credentials: 'same-origin',
@@ -949,21 +755,21 @@ function adminDeleteRole(id) {
         }).catch(function () { toast('Request failed', 'error'); });
 }
 
-function adminShowNewRole() {
+export function adminShowNewRole() {
     var c = document.getElementById('admin-new-role-collapsed');
     var e = document.getElementById('admin-new-role-expanded');
     if (c) c.style.display = 'none';
     if (e) e.style.display = '';
 }
 
-function adminCancelNewRole() {
+export function adminCancelNewRole() {
     var c = document.getElementById('admin-new-role-collapsed');
     var e = document.getElementById('admin-new-role-expanded');
     if (c) c.style.display = '';
     if (e) e.style.display = 'none';
 }
 
-function adminSaveNewRole() {
+export function adminSaveNewRole() {
     var name  = ((document.getElementById('admin-new-role-name')  || {}).value || '').trim();
     var color = (document.getElementById('admin-new-role-color')  || {}).value || '#7c4ab8';
     if (!name) { toast('Role name required', 'error'); return; }
@@ -979,8 +785,7 @@ function adminSaveNewRole() {
         }).catch(function () { toast('Request failed', 'error'); });
 }
 
-// ── User management ────────────────────────────────────────────
-function adminToggleUserRole(cb, discordId) {
+export function adminToggleUserRole(cb, discordId) {
     var container = document.getElementById('admin-roles-' + discordId);
     var roleIds = [];
     if (container) {
@@ -1002,7 +807,7 @@ function adminToggleUserRole(cb, discordId) {
         });
 }
 
-function adminAddUser() {
+export function adminAddUser() {
     var id    = ((document.getElementById('admin-new-user-id')    || {}).value || '').trim();
     var label = ((document.getElementById('admin-new-user-label') || {}).value || '').trim();
     var roleIds = [];
@@ -1024,7 +829,7 @@ function adminAddUser() {
         }).catch(function () { toast('Request failed', 'error'); });
 }
 
-function adminRemoveUser(discordId) {
+export function adminRemoveUser(discordId) {
     if (!confirm('Remove this user from the admin list?')) return;
     fetch('/api/admin/allowlist', {
         method: 'DELETE', credentials: 'same-origin',
@@ -1075,7 +880,7 @@ function _adminRenderErrors(body) {
 }
 
 // ── Officer management ────────────────────────────────────────
-function adminAddOfficer() {
+export function adminAddOfficer() {
     var username = ((document.getElementById('admin-mf-add-inp') || {}).value || '').trim();
     var rank     = ((document.getElementById('admin-mf-add-rank') || {}).value || '').trim();
     if (!username) { toast('Enter a username', 'error'); return; }
@@ -1108,7 +913,7 @@ function adminAddOfficer() {
         });
 }
 
-function adminRemoveOfficer() {
+export function adminRemoveOfficer() {
     var username = ((document.getElementById('admin-mf-rm-inp') || {}).value || '').trim();
     if (!username) { toast('Enter a username', 'error'); return; }
     if (GROUP_MEMBERS.length && GROUP_MEMBERS.indexOf(username) === -1) {
@@ -1144,25 +949,3 @@ function adminRemoveOfficer() {
             toast('Request failed', 'error');
         });
 }
-
-// ── Form field helpers ────────────────────────────────────────
-function fld(id, label, req, inputHtml, errMsg) {
-    return '<div class="field" id="'+id+'"><label>'+esc(label)+(req?' <span class="req-star">*</span>':'')+' </label>'+
-        inputHtml+(errMsg?'<div class="field-error">'+esc(errMsg)+'</div>':'')+'</div>';
-}
-function fHead(icon, title, desc) {
-    return '<div class="form-card-head">'+
-        '<div><div class="form-card-title">'+esc(title)+'</div><div class="form-card-desc">'+esc(desc)+'</div></div></div>';
-}
-function honeypot(id) {
-    return '<div class="hp-wrap"><input type="text" id="'+id+'" tabindex="-1" autocomplete="off"></div>';
-}
-function setFieldErr(id, msg) {
-    var f=$(id); if(!f)return; f.classList.add('has-error');
-    var e=f.querySelector('.field-error'); if(e){if(msg)e.textContent=msg; e.style.display='block';}
-}
-function clrFieldErr(id) {
-    var f=$(id); if(!f)return; f.classList.remove('has-error');
-    var e=f.querySelector('.field-error'); if(e) e.style.display='none';
-}
-function clrAll(ids) { ids.forEach(clrFieldErr); }
