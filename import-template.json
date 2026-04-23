@@ -1,0 +1,788 @@
+{
+  "commandos-dis": {
+    "gamepool": [
+      {
+        "gameId": "4895770266",
+        "name": "Tenox Fairzone",
+        "eventTypes": [
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "4690481102",
+        "name": "Tenox 2",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "121794864709377",
+        "name": "Sargon's Depot",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "75120024016585",
+        "name": "Citadel of Adun",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "125640199324742",
+        "name": "Port Orleans",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "136561075779141",
+        "name": "Dragon's WatchTower",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "131589406773996",
+        "name": "Forge of Meridian",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "131214459629999",
+        "name": "Arcon III Remastered",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "135010870544531",
+        "name": "Icemark",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "106337681527968",
+        "name": "Crystal Outpost Remastered",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "75236583092873",
+        "name": "Echo Base Remastered",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "94704155049872",
+        "name": "Devil's Rest",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "118905991527248",
+        "name": "The Grand Crusade",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "83260076800849",
+        "name": "Aztec Fortress Remastered",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "18869077155",
+        "name": "Hydro II Remastered",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "77337227353760",
+        "name": "Hardpoint Coldfront",
+        "eventTypes": [
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "88551595279850",
+        "name": "Hardpoint Gutenburg",
+        "eventTypes": [
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "84454831539162",
+        "name": "Varcia Remastered",
+        "eventTypes": [
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "11370057298",
+        "name": "Unfair Zone",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "14821275728",
+        "name": "Vulcan Garrison",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "6724595474",
+        "name": "Pride of Altaris",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "130168256027224",
+        "name": "Nagashiro",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "4764367940",
+        "name": "Ignis III",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "4484427399",
+        "name": "Arcannian Frontier III",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "14905485645",
+        "name": "Franxx",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "118987827318205",
+        "name": "Nova Station",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "70983359460672",
+        "name": "Onyx Citadel",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "82023579765520",
+        "name": "Mataro Defense Training",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "117954931852402",
+        "name": "Overwatch Defense Training",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "106608091105526",
+        "name": "Surrex Assembly",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "7845941294",
+        "name": "Reversal Compound",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "8771989818",
+        "name": "Reversal Compound Remastered",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "110564853095780",
+        "name": "Helios Foundry 2",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "5841467683",
+        "name": "Glacian Factory",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "14484508639",
+        "name": "Polaris Financial Plaza",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "5361853069",
+        "name": "Aurora's Dam",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "6101349068",
+        "name": "Blizzard Outfall",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "9559446343",
+        "name": "Atlantis 2",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "135699891610166",
+        "name": "Karrik Point Solstice",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "15254508428",
+        "name": "Hydrofactorum Solstice",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "111191395200012",
+        "name": "Ordana Foundry Solstice",
+        "eventTypes": [
+          "111191395200012"
+        ]
+      },
+      {
+        "gameId": "4595827211",
+        "name": "Lexon Research District",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "7458449354",
+        "name": "Fairzone Aequum",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar"
+        ]
+      },
+      {
+        "gameId": "7775216059",
+        "name": "Armageddon Shipyard",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "12474992964",
+        "name": "Depot",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "11893177941",
+        "name": "Obsidius Skyline",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "12474987497",
+        "name": "Crown of Polaris",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "7735046850",
+        "name": "Warehouse Defensive Training",
+        "eventTypes": [
+          "Practice Raid",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "12358927919",
+        "name": "Korriban Orbital Station",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "125787821511508",
+        "name": "Quantum Reach",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "17823462390",
+        "name": "Bastion of Vesria",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "2007375127",
+        "name": "Port Maersk",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "17449488960",
+        "name": "Soccer",
+        "eventTypes": [
+          "Practice Raid",
+          "Spar",
+          "Tryout"
+        ]
+      },
+      {
+        "gameId": "96591832838278",
+        "name": "Valia Central Station",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "11745171124",
+        "name": "Eular Station",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "10118547738",
+        "name": "Docks Fairzone II",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "14762317350",
+        "name": "Azukan Mines II",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      },
+      {
+        "gameId": "16527375561",
+        "name": "Stormridge",
+        "eventTypes": [
+          "Practice Raid"
+        ]
+      }
+    ],
+    "users": {
+      "SyntaxError_Dev": {
+        "points": 1,
+        "raffleEntries": 1,
+        "claimedTiles": [
+          11
+        ],
+        "history": [
+          {
+            "tile": 1,
+            "action": "claim",
+            "points": 1,
+            "timestamp": "2026-04-06T04:30:59.751Z"
+          }
+        ]
+      },
+      "vusqar": {
+        "points": 1,
+        "raffleEntries": 1,
+        "claimedTiles": [
+          0
+        ],
+        "history": [
+          {
+            "tile": 0,
+            "action": "claim",
+            "points": 1,
+            "timestamp": "2026-04-12T04:19:28.000Z"
+          }
+        ]
+      }
+    },
+    "board": {
+      "tiles": [
+        {
+          "position": 0,
+          "gameId": "12474992964",
+          "gameName": "Depot",
+          "eventType": "Spar",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 1,
+          "gameId": "16527375561",
+          "gameName": "Stormridge",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 2,
+          "gameId": "110564853095780",
+          "gameName": "Helios Foundry 2",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 3,
+          "gameId": "7775216059",
+          "gameName": "Armageddon Shipyard",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 4,
+          "gameId": "131589406773996",
+          "gameName": "Forge of Meridian",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 5,
+          "gameId": "5361853069",
+          "gameName": "Aurora's Dam",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 6,
+          "gameId": "118987827318205",
+          "gameName": "Nova Station",
+          "eventType": "Tryout",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 7,
+          "gameId": "6724595474",
+          "gameName": "Pride of Altaris",
+          "eventType": "Tryout",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 8,
+          "gameId": "7845941294",
+          "gameName": "Reversal Compound",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 9,
+          "gameId": "11370057298",
+          "gameName": "Unfair Zone",
+          "eventType": "Tryout",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 10,
+          "gameId": "130168256027224",
+          "gameName": "Nagashiro",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 11,
+          "gameId": "75120024016585",
+          "gameName": "Citadel of Adun",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 12,
+          "gameId": "83260076800849",
+          "gameName": "Aztec Fortress Remastered",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 13,
+          "gameId": "121794864709377",
+          "gameName": "Sargon's Depot",
+          "eventType": "Spar",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 14,
+          "gameId": "106337681527968",
+          "gameName": "Crystal Outpost Remastered",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 15,
+          "gameId": "12358927919",
+          "gameName": "Korriban Orbital Station",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 16,
+          "gameId": "14821275728",
+          "gameName": "Vulcan Garrison",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 17,
+          "gameId": "136561075779141",
+          "gameName": "Dragon's WatchTower",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 18,
+          "gameId": "125787821511508",
+          "gameName": "Quantum Reach",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 19,
+          "gameId": "12474987497",
+          "gameName": "Crown of Polaris",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 20,
+          "gameId": "106608091105526",
+          "gameName": "Surrex Assembly",
+          "eventType": "Tryout",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 21,
+          "gameId": "14762317350",
+          "gameName": "Azukan Mines II",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 22,
+          "gameId": "10118547738",
+          "gameName": "Docks Fairzone II",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 23,
+          "gameId": "4895770266",
+          "gameName": "Tenox Fairzone",
+          "eventType": "Spar",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        },
+        {
+          "position": 24,
+          "gameId": "75236583092873",
+          "gameName": "Echo Base Remastered",
+          "eventType": "Practice Raid",
+          "completed": false,
+          "completedBy": null,
+          "completedAt": null,
+          "points": 1,
+          "multiplier": 1,
+          "lockedByAdmin": false
+        }
+      ],
+      "globalMultiplier": 1,
+      "weekNumber": 16,
+      "updatedAt": "2026-04-14T02:25:17.119Z",
+      "lastSyncAt": null
+    }
+  }
+}

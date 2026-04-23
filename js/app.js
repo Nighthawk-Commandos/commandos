@@ -456,7 +456,9 @@ document.addEventListener('focus', function (e) {
 }, true);
 
 // ── Static DOM wiring ─────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function () {
+// Script is dynamically injected after auth, so DOMContentLoaded has already
+// fired — wire immediately since the DOM is guaranteed to be ready.
+(function () {
     var hbg = document.getElementById('hbg');
     if (hbg) hbg.addEventListener('click', toggleSidebar);
     var refreshBtn = document.getElementById('refresh-btn');
@@ -466,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.nav-item').forEach(function (item) {
         item.addEventListener('click', function () { go(item.dataset.key, item); });
     });
-});
+})();
 
 // ── Quick link — ?link=<section|form-key> ─────────────────────
 var _quickLink = (function () {

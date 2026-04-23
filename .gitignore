@@ -4,7 +4,10 @@
 .env
 /.netlify
 deno.lock
-appscript_code.js
 /.vscode
 /.idea/
 /.trunk
+/.claude
+/.trunk
+/.vscode
+app_script.js
