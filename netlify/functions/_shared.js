@@ -82,9 +82,12 @@ async function getUserAdminPerms(session, adminStore) {
         ALL_PERMS.forEach(k => { perms[k] = true; });
         return perms;
     }
+    console.log('[admin-debug] rank check failed — rank:', session.divisionRank, 'fresh:', _isRankSessionFresh(session), '— falling back to allowlist');
     try {
         const list  = await adminStore.get('allowlist', { type: 'json' }) || [];
+        console.log('[admin-debug] allowlist read returned', Array.isArray(list) ? list.length + ' entries' : typeof list);
         const entry = list.find(e => e.discordId === session.discordId);
+        console.log('[admin-debug] discordId lookup:', session.discordId, '— found:', !!entry);
         if (!entry) return null;
 
         // Collect all roleIds — support legacy single roleId and new roleIds array

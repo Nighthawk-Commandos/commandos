@@ -12,6 +12,8 @@ let _app = null;
 
 function _getApp() {
     if (_app) return _app;
+    // In warm Lambda containers the SDK may already be initialized but _app lost.
+    if (admin.apps.length > 0) { _app = admin.app(); return _app; }
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!raw) throw new Error('[_firebase] FIREBASE_SERVICE_ACCOUNT env var is not set');
     const creds = JSON.parse(raw);

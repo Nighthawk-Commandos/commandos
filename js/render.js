@@ -573,8 +573,8 @@ function _adminRenderPermToggles(existingPerms) {
 function _adminRenderRoles(body) {
     body.innerHTML = '<div class="obj-loading">Loading\u2026</div>';
     Promise.all([
-        fetch('/api/admin/roles',     { credentials: 'same-origin' }).then(function (r) { return r.json(); }),
-        fetch('/api/admin/allowlist', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+        fetch('/api/admin/roles',     { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('roles ' + r.status); return r.json(); }),
+        fetch('/api/admin/allowlist', { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('allowlist ' + r.status); return r.json(); })
     ]).then(function (results) {
         _adminBuildRolesUI(body, Array.isArray(results[0]) ? results[0] : [], Array.isArray(results[1]) ? results[1] : []);
     }).catch(function (e) {
