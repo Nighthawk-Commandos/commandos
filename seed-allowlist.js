@@ -1,11 +1,23 @@
 // Run once to bootstrap your allowlist entry in Firestore.
-// Usage: FIREBASE_SERVICE_ACCOUNT='<json>' node seed-allowlist.js
+// Usage: node seed-allowlist.js   (reads .env automatically if env var not set)
 'use strict';
 
 const admin = require('firebase-admin');
 
+// Auto-load .env if FIREBASE_SERVICE_ACCOUNT isn't already in the environment
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+        const fs = require('fs');
+        const lines = fs.readFileSync('.env', 'utf8').split('\n');
+        for (const line of lines) {
+            const idx = line.indexOf('=');
+            if (idx > 0) process.env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+        }
+    } catch (_) {}
+}
+
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-if (!raw) { console.error('FIREBASE_SERVICE_ACCOUNT env var not set'); process.exit(1); }
+if (!raw) { console.error('FIREBASE_SERVICE_ACCOUNT env var not set and .env not found'); process.exit(1); }
 
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
 
