@@ -18,7 +18,7 @@ exports.handler = async (event) => {
         const res = await fetch(objectivesUrl + '?action=api', {
             redirect: 'follow',
             headers: { 'Cache-Control': 'no-store' },
-            signal: AbortSignal.timeout(25000)
+            signal: AbortSignal.timeout(7000)
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();

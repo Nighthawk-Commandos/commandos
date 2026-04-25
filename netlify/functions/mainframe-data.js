@@ -9,8 +9,8 @@
 
 const { fireStore, verifySession, json, sendErrorWebhook } = require('./_shared');
 
-const CACHE_TTL_MS  = 10 * 60 * 1000; // 10 minutes fresh
-const STALE_MAX_MS  = 60 * 60 * 1000; // serve stale for up to 1 hour on error
+const CACHE_TTL_MS  = 10 * 60 * 1000;      // 10 minutes fresh
+const STALE_MAX_MS  = 24 * 60 * 60 * 1000; // serve stale for up to 24 hours on error
 
 function dataJson(body) {
     return {
@@ -50,7 +50,7 @@ exports.handler = async (event) => {
         const url = scriptUrl + '?action=api&fn=getAllData';
         const res = await fetch(url, {
             headers: { 'Cache-Control': 'no-store' },
-            signal:  AbortSignal.timeout(24000)
+            signal:  AbortSignal.timeout(7000)
         });
         if (!res.ok) throw new Error('Apps Script HTTP ' + res.status);
         const data = await res.json();
@@ -59,7 +59,11 @@ exports.handler = async (event) => {
         return dataJson(data);
     } catch (err) {
         if (staleData) return dataJson(staleData);  // serve stale rather than error
-        await sendErrorWebhook('Mainframe Data Fetch Error', err.message, { fn: 'getAllData' }).catch(() => {});
+        // Only webhook on real errors (HTTP failures), not expected Apps Script timeouts
+        const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError';
+        if (!isTimeout) {
+            await sendErrorWebhook('Mainframe Data Fetch Error', err.message, { fn: 'getAllData' }).catch(() => {});
+        }
         return json(502, { error: 'Failed to fetch mainframe data: ' + err.message });
     }
 };

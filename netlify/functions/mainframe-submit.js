@@ -39,7 +39,7 @@ exports.handler = async (event) => {
     try {
         const res = await fetch(url, {
             headers: { 'Cache-Control': 'no-store' },
-            signal: AbortSignal.timeout(30000)
+            signal: AbortSignal.timeout(7000)
         });
         if (!res.ok) throw new Error('Apps Script HTTP ' + res.status);
         const data = await res.json();
