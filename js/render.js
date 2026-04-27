@@ -362,7 +362,7 @@ export function docOutsideClick(pairs) {
 //  Unified Admin Dashboard
 // ═══════════════════════════════════════════════════════════════
 
-var _ADMIN = { tab: null, roles: [], list: [] };
+var _ADMIN = { tab: null, roles: [], list: [], seq: 0 };
 
 var ADMIN_PERM_DEFS = [
     { key: 'roleAssign',  label: 'Assign Users', superadminOnly: true  },
@@ -452,10 +452,13 @@ function _adminRenderTab() {
     var body = document.getElementById('admin-body');
     if (!body) return;
     var tab = _ADMIN.tab;
-    if (tab === 'roles')     { _adminRenderRoles(body);     return; }
+    var seq = ++_ADMIN.seq;
+    var isCurrent = function () { return _ADMIN.seq === seq; };
     if (tab === 'mainframe') { _adminRenderMainframe(body); return; }
-    if (tab === 'errors')    { _adminRenderErrors(body);    return; }
-    adminRenderDisTab(tab, body);
+    body.innerHTML = '<div class="obj-loading">Loading…</div>';
+    if (tab === 'roles')  { _adminRenderRoles(body, isCurrent);  return; }
+    if (tab === 'errors') { _adminRenderErrors(body, isCurrent); return; }
+    adminRenderDisTab(tab, body, isCurrent);
 }
 
 // ── Mainframe tab ─────────────────────────────────────────────
@@ -570,14 +573,15 @@ function _adminRenderPermToggles(existingPerms) {
     return html;
 }
 
-function _adminRenderRoles(body) {
-    body.innerHTML = '<div class="obj-loading">Loading\u2026</div>';
+function _adminRenderRoles(body, isCurrent) {
     Promise.all([
         fetch('/api/admin/roles',     { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('roles ' + r.status); return r.json(); }),
         fetch('/api/admin/allowlist', { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('allowlist ' + r.status); return r.json(); })
     ]).then(function (results) {
+        if (!isCurrent()) return;
         _adminBuildRolesUI(body, Array.isArray(results[0]) ? results[0] : [], Array.isArray(results[1]) ? results[1] : []);
     }).catch(function (e) {
+        if (!isCurrent()) return;
         body.innerHTML = '<div class="obj-error">Failed to load: ' + esc(e.message) + '</div>';
     });
 }
@@ -844,15 +848,15 @@ export function adminRemoveUser(discordId) {
 
 function _adminReloadRoles() {
     var body = document.getElementById('admin-body');
-    if (body && _ADMIN.tab === 'roles') _adminRenderRoles(body);
+    if (body && _ADMIN.tab === 'roles') _adminRenderRoles(body, function () { return true; });
 }
 
 // ── Errors tab ────────────────────────────────────────────────
-function _adminRenderErrors(body) {
-    body.innerHTML = '<div class="obj-loading">Loading error log\u2026</div>';
+function _adminRenderErrors(body, isCurrent) {
     fetch('/api/admin/errors', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (res) {
+            if (!isCurrent()) return;
             var log = Array.isArray(res.log) ? res.log.slice().reverse() : [];
             if (log.length === 0) {
                 body.innerHTML = '<div class="empty">No errors logged.</div>';
@@ -867,14 +871,15 @@ function _adminRenderErrors(body) {
             log.forEach(function (entry) {
                 html += '<tr>' +
                     '<td style="white-space:nowrap;font-size:11px">' + esc(new Date(entry.timestamp).toLocaleString()) + '</td>' +
-                    '<td><span class="badge b-incomplete">' + esc(entry.action || '\u2014') + '</span></td>' +
-                    '<td style="font-size:11px;color:#e05252;max-width:260px;word-break:break-word">' + esc(entry.error || '\u2014') + '</td>' +
+                    '<td><span class="badge b-incomplete">' + esc(entry.action || '—') + '</span></td>' +
+                    '<td style="font-size:11px;color:#e05252;max-width:260px;word-break:break-word">' + esc(entry.error || '—') + '</td>' +
                     '<td style="font-size:11px;color:var(--muted);word-break:break-all">' + esc(JSON.stringify(entry.details || {})) + '</td>' +
                     '</tr>';
             });
             body.innerHTML = html + '</tbody></table></div>';
         })
         .catch(function (e) {
+            if (!isCurrent()) return;
             body.innerHTML = '<div class="obj-error">Failed to load error log: ' + esc(e.message) + '</div>';
         });
 }

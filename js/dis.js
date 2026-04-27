@@ -387,31 +387,32 @@ function _disRenderRaffle() {
 // ═══════════════════════════════════════════════════════════════
 
 // Entry point called by render.js's _adminRenderTab
-export function adminRenderDisTab(tabKey, body) {
+export function adminRenderDisTab(tabKey, body, isCurrent) {
     _DIS.adminTab = tabKey;
     if (!_DIS.state) {
-        body.innerHTML = '<div class="obj-loading">Loading DIS state\u2026</div>';
         fetch('/api/dis/state')
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (!isCurrent()) return;
                 _DIS.state = data;
-                _adminRenderDisTabContent(tabKey, body);
+                _adminRenderDisTabContent(tabKey, body, isCurrent);
             })
             .catch(function (e) {
+                if (!isCurrent()) return;
                 body.innerHTML = '<div class="obj-error">Failed to load DIS state: ' + esc(e.message) + '</div>';
             });
         return;
     }
-    _adminRenderDisTabContent(tabKey, body);
+    _adminRenderDisTabContent(tabKey, body, isCurrent);
 }
 
-function _adminRenderDisTabContent(tabKey, body) {
+function _adminRenderDisTabContent(tabKey, body, isCurrent) {
     if (tabKey === 'sync')          _disAdminSync(body);
     else if (tabKey === 'tiles')    _disAdminTiles(body);
     else if (tabKey === 'points')   _disAdminPoints(body);
     else if (tabKey === 'raffle')   _disAdminRaffle(body);
     else if (tabKey === 'gamepool') _disAdminGamePool(body);
-    else if (tabKey === 'audit')    _disAdminAudit(body);
+    else if (tabKey === 'audit')    _disAdminAudit(body, isCurrent);
 }
 
 function _adminRefreshDisTab() {
@@ -421,7 +422,7 @@ function _adminRefreshDisTab() {
         .then(function (r) { return r.json(); })
         .then(function (data) {
             _DIS.state = data;
-            _adminRenderDisTabContent(_DIS.adminTab, body);
+            _adminRenderDisTabContent(_DIS.adminTab, body, function () { return true; });
         });
 }
 
@@ -648,8 +649,7 @@ function _disRenderGamePool(body) {
 }
 
 // ── Admin: Audit Log tab ───────────────────────────────────────
-function _disAdminAudit(body) {
-    body.innerHTML = '<div class="obj-loading">Loading audit log\u2026</div>';
+function _disAdminAudit(body, isCurrent) {
     Promise.all([
         fetch('/api/dis/admin', {
             method: 'POST',
@@ -660,6 +660,7 @@ function _disAdminAudit(body) {
             .then(function (r) { return r.ok ? r.json() : { log: [] }; })
             .catch(function () { return { log: [] }; })
     ]).then(function (results) {
+        if (!isCurrent()) return;
         var disLog   = (results[0].log || []).map(function (e) { return Object.assign({}, e, { _src: 'DIS' }); });
         var adminLog = (results[1].log || []).map(function (e) { return Object.assign({}, e, { _src: 'ADM' }); });
         var log = disLog.concat(adminLog).sort(function (a, b) {
@@ -685,8 +686,10 @@ function _disAdminAudit(body) {
                 '<td style="font-size:11px;color:var(--muted);word-break:break-all">' + esc(JSON.stringify(entry.details || {})) + '</td>' +
                 '</tr>';
         });
+        if (!isCurrent()) return;
         body.innerHTML = html + '</tbody></table></div>';
     }).catch(function (e) {
+        if (!isCurrent()) return;
         body.innerHTML = '<div class="obj-error">Failed to load audit log: ' + esc(e.message) + '</div>';
     });
 }

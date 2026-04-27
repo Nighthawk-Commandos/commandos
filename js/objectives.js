@@ -4,7 +4,7 @@
 //  sidebar nav + overview + per-department task cards
 // ═══════════════════════════════════════════════════════════════
 
-import { esc } from './utils.js';
+import { esc, DEPT_COLOURS } from './utils.js';
 
 // ── Cache (1 hour, stored in localStorage) ───────────────────
 var _OBJ_CACHE_KEY = 'obj:data';
@@ -13,6 +13,74 @@ var _objMemCache   = null;
 var _objMemExp     = 0;
 var _objData       = null;
 var _objView       = 'overview';
+
+// Fallback palette for departments not in DEPT_COLOURS
+var _OBJ_FALLBACK_COLORS = ['#4a7fc8','#7c4ab8','#4a9c72','#c8a44a','#c84a4a','#4ac8c8'];
+
+function _deptColor(name) {
+    if (DEPT_COLOURS[name]) return DEPT_COLOURS[name];
+    var hash = 0;
+    for (var i = 0; i < name.length; i++) {
+        hash = (hash << 5) - hash + name.charCodeAt(i);
+        hash |= 0;
+    }
+    return _OBJ_FALLBACK_COLORS[Math.abs(hash) % _OBJ_FALLBACK_COLORS.length];
+}
+
+// ── Task helpers ──────────────────────────────────────────────
+function _normSt(s) {
+    if (!s) return 'not';
+    var l = s.toLowerCase();
+    if (l.indexOf('progress') !== -1) return 'progress';
+    if (l.indexOf('launch') !== -1 || l.indexOf('complete') !== -1) return 'launched';
+    return 'not';
+}
+
+function _priorityOrd(p) {
+    var order = { highest: 0, high: 1, medium: 2, low: 3 };
+    var v = order[(p || '').toLowerCase()];
+    return v !== undefined ? v : 4;
+}
+function _sizeOrd(s) {
+    var order = { large: 0, medium: 1, small: 2 };
+    var v = order[(s || '').toLowerCase()];
+    return v !== undefined ? v : 3;
+}
+function _statusOrd(s) {
+    var order = { not: 0, progress: 1, launched: 2 };
+    return order[_normSt(s)];
+}
+
+function _sortTasks(tasks) {
+    return tasks.slice().sort(function (a, b) {
+        var pa = _priorityOrd(a.priority), pb = _priorityOrd(b.priority);
+        if (pa !== pb) return pa - pb;
+        var sa = _sizeOrd(a.size), sb = _sizeOrd(b.size);
+        if (sa !== sb) return sa - sb;
+        return _statusOrd(a.status) - _statusOrd(b.status);
+    });
+}
+
+function _parseTaskDate(s) {
+    if (!s) return null;
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return new Date(+m[3], +m[1] - 1, +m[2]);
+    return null;
+}
+
+var _today = (function () { var d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+
+function _isExpired(t) {
+    var d = _parseTaskDate(t.date);
+    if (!d) return false;
+    return d < _today;
+}
+
+function _activeTasks(tasks) {
+    return (tasks || []).filter(function (t) { return !_isExpired(t); });
+}
 
 // ── Entry point ───────────────────────────────────────────────
 export function renderObjectivesSection() {
@@ -106,11 +174,12 @@ function _objBuildNav() {
     var nav = document.getElementById('obj-nav');
     if (!nav || !_objData || !_objData.divisions) return;
     _objData.divisions.forEach(function (dept) {
+        var color = _deptColor(dept.name);
         var el = document.createElement('div');
         el.className = 'obj-nav-item';
         el.setAttribute('data-objkey', dept.name);
         el.setAttribute('data-click', 'objGo');
-        el.innerHTML = '<span class="obj-nav-dot"></span>' + esc(dept.name);
+        el.innerHTML = '<span class="obj-nav-dot" style="background:' + esc(color) + '"></span>' + esc(dept.name);
         nav.appendChild(el);
     });
 }
@@ -118,8 +187,10 @@ function _objBuildNav() {
 // ── Navigation ────────────────────────────────────────────────
 export function objGo(el) {
     var key = el && el.dataset ? el.dataset.objkey : el;
-    document.querySelectorAll('.obj-nav-item').forEach(function (n) { n.classList.remove('active'); });
-    if (el && el.classList) el.classList.add('active');
+    // Activate the matching nav item regardless of what element was clicked
+    document.querySelectorAll('.obj-nav-item').forEach(function (n) {
+        n.classList.toggle('active', n.dataset.objkey === key);
+    });
     var mainEl = document.getElementById('obj-main');
     if (mainEl) mainEl.scrollTop = 0;
     _objView = key;
@@ -136,7 +207,9 @@ function _objRenderOverview() {
     if (!_objData) return;
     var c = _objData.commandos || {};
     var allTasks = [];
-    (_objData.divisions || []).forEach(function (d) { allTasks = allTasks.concat(d.tasks || []); });
+    (_objData.divisions || []).forEach(function (d) {
+        allTasks = allTasks.concat(_activeTasks(d.tasks));
+    });
 
     var inProg   = allTasks.filter(function (t) { return _normSt(t.status) === 'progress'; }).length;
     var notSt    = allTasks.filter(function (t) { return _normSt(t.status) === 'not'; }).length;
@@ -145,7 +218,7 @@ function _objRenderOverview() {
 
     var h = '';
     h += '<div class="page-header">';
-    h += '<div class="eyebrow">Nighthawk Commandos \u2014 ' + esc(_objData.month || 'Monthly') + '</div>';
+    h += '<div class="eyebrow">Nighthawk Commandos — ' + esc(_objData.month || 'Monthly') + '</div>';
     h += '<h1>TNIC Objectives</h1>';
     h += '<div class="page-meta">';
     if (c.director) h += _chip('Director', c.director);
@@ -162,7 +235,7 @@ function _objRenderOverview() {
     h += '</div>';
 
     h += '<div class="section-label">Monthly Directives</div>';
-    var cmTasks = c.tasks || [];
+    var cmTasks = _sortTasks(_activeTasks(c.tasks));
     if (cmTasks.length === 0) {
         h += '<div class="empty-state">No monthly directives found.</div>';
     } else {
@@ -182,15 +255,16 @@ function _objRenderOverview() {
 
 // ── Department page ───────────────────────────────────────────
 function _objRenderDept(dept) {
-    var tasks    = dept.tasks || [];
+    var color = _deptColor(dept.name);
+    var tasks    = _sortTasks(_activeTasks(dept.tasks));
     var inProg   = tasks.filter(function (t) { return _normSt(t.status) === 'progress'; }).length;
     var notSt    = tasks.filter(function (t) { return _normSt(t.status) === 'not'; }).length;
     var launched = tasks.filter(function (t) { return _normSt(t.status) === 'launched'; }).length;
     var highest  = tasks.filter(function (t) { return (t.priority || '').toLowerCase() === 'highest'; }).length;
 
     var h = '';
-    h += '<div class="page-header">';
-    h += '<div class="eyebrow">Department Objectives</div>';
+    h += '<div class="page-header" style="border-left:3px solid ' + esc(color) + ';padding-left:14px">';
+    h += '<div class="eyebrow" style="color:' + esc(color) + '">Department Objectives</div>';
     h += '<h1>' + esc(dept.name) + '</h1>';
     h += '<div class="page-meta">';
     if (dept.overseer)      h += _chip('Overseer', dept.overseer);
@@ -218,14 +292,15 @@ function _objRenderDept(dept) {
 
 // ── Department summary card ───────────────────────────────────
 function _deptCard(dept) {
-    var tasks    = dept.tasks || [];
+    var color = _deptColor(dept.name);
+    var tasks    = _activeTasks(dept.tasks);
     var inProg   = tasks.filter(function (t) { return _normSt(t.status) === 'progress'; }).length;
     var notSt    = tasks.filter(function (t) { return _normSt(t.status) === 'not'; }).length;
     var launched = tasks.filter(function (t) { return _normSt(t.status) === 'launched'; }).length;
 
-    var h = '<div class="dept-card" data-objkey="' + esc(dept.name) + '" data-click="objGo">';
+    var h = '<div class="dept-card" style="border-left:3px solid ' + esc(color) + '" data-objkey="' + esc(dept.name) + '" data-click="objGo">';
     h += '<div>';
-    h += '<div class="dept-card-name">' + esc(dept.name) + '</div>';
+    h += '<div class="dept-card-name" style="color:' + esc(color) + '">' + esc(dept.name) + '</div>';
     h += '<div class="dept-card-sub">Overseer: <span>' + esc(dept.overseer || 'VACANT') + '</span></div>';
     h += '</div>';
     h += '<div class="dept-badges">';
@@ -265,14 +340,6 @@ function _taskCard(t, idx, isCmdo) {
 function _objSetContent(html) {
     var el = document.getElementById('obj-content');
     if (el) el.innerHTML = html;
-}
-
-function _normSt(s) {
-    if (!s) return 'not';
-    var l = s.toLowerCase();
-    if (l.indexOf('progress') !== -1) return 'progress';
-    if (l.indexOf('launch') !== -1 || l.indexOf('complete') !== -1) return 'launched';
-    return 'not';
 }
 
 function _chip(label, val) {

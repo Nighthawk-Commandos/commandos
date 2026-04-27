@@ -110,6 +110,7 @@ function renderHomeScreen() {
             '<div class="home-card-title">' + esc(s.title) + '</div>' +
             '<div class="home-card-desc">' + esc(s.desc) + '</div>' +
             (accessible ? '' : '<div class="home-card-lock">' + esc(s.lockMsg) + '</div>') +
+            (accessible ? '<button class="home-card-copy-btn" data-click="copyQuickLink" data-link="' + s.id + '" title="Copy quick link"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Copy link</button>' : '') +
             '</div>' +
             (accessible ? '<div class="home-card-arrow">&#8594;</div>' : '') +
             '</div>';
@@ -412,6 +413,14 @@ function _dispatch(fn, el, e) {
             break;
         }
         // DIS
+        case 'copyQuickLink': {
+            e.stopPropagation();
+            var url = location.origin + '/?link=' + encodeURIComponent(d.link);
+            navigator.clipboard.writeText(url)
+                .then(function () { toast('Link copied!', 'success'); })
+                .catch(function () { toast('Failed to copy', 'error'); });
+            break;
+        }
         case 'openGame': {
             if (d.gameId && /^\d+$/.test(d.gameId)) {
                 open('https://www.roblox.com/games/' + d.gameId, '_blank', 'noopener,noreferrer');
@@ -468,6 +477,15 @@ document.addEventListener('focus', function (e) {
     document.querySelectorAll('.nav-item').forEach(function (item) {
         item.addEventListener('click', function () { go(item.dataset.key, item); });
     });
+    document.querySelectorAll('.nav-copy-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var url = location.origin + '/?link=' + encodeURIComponent(btn.dataset.link);
+            navigator.clipboard.writeText(url)
+                .then(function () { toast('Link copied!', 'success'); })
+                .catch(function () { toast('Failed to copy', 'error'); });
+        });
+    });
 })();
 
 // ── Quick link — ?link=<section|form-key> ─────────────────────
@@ -504,7 +522,8 @@ function loadMainframe() {
         populateProfileCard();
         var pageKey = _pendingPage || 'settings';
         _pendingPage = null;
-        if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(_D)); }
+        var validKey = PAGES[pageKey] ? pageKey : 'settings';
+        go(validKey, document.querySelector('.nav-item[data-key="' + validKey + '"]'));
         return;
     }
     var ls = document.getElementById('loading-status');
@@ -520,7 +539,8 @@ function loadMainframe() {
             populateProfileCard();
             var pageKey = _pendingPage || 'settings';
             _pendingPage = null;
-            if (PAGES[pageKey]) { PAGES[pageKey](); } else { setContent(renderSettings(_D)); }
+            var validKey = PAGES[pageKey] ? pageKey : 'settings';
+            go(validKey, document.querySelector('.nav-item[data-key="' + validKey + '"]'));
             var hbg = document.getElementById('hbg'); if (hbg) hbg.style.display = '';
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
