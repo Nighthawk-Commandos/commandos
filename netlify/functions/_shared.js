@@ -94,6 +94,30 @@ function clearAdminCache() {
     _adminCacheTs = 0;
 }
 
+// ── Content perm groups cache ───────────────────────────────────
+// Perm groups live in commandos-content and can carry a roleId that
+// grants admin-perm role permissions to all group members.
+let _contentPGCache   = null;
+let _contentPGCacheTs = 0;
+
+async function _getContentPermGroups() {
+    if (_contentPGCache && Date.now() - _contentPGCacheTs < _ADMIN_CACHE_TTL) {
+        return _contentPGCache;
+    }
+    try {
+        const groups = await fireStore('commandos-content').get('perm-groups', { type: 'json' }).catch(() => []);
+        _contentPGCache   = Array.isArray(groups) ? groups : [];
+        _contentPGCacheTs = Date.now();
+        return _contentPGCache;
+    } catch { return []; }
+}
+
+// Call this after any write to perm-groups so the next request sees fresh data.
+function clearContentPGCache() {
+    _contentPGCache   = null;
+    _contentPGCacheTs = 0;
+}
+
 // ── Admin gate ──────────────────────────────────────────────────
 // Returns null if the session passes (rank 246+ with fresh session, or on allowlist).
 // Returns a JSON error response if access is denied.
@@ -132,7 +156,10 @@ async function getUserAdminPerms(session, adminStore) {
         return perms;
     }
     try {
-        const { list, roles, grants } = await _getAdminData(adminStore);
+        const [{ list, roles, grants }, contentGroups] = await Promise.all([
+            _getAdminData(adminStore),
+            _getContentPermGroups()
+        ]);
         const entry = list.find(e => e.discordId === session.discordId);
 
         // Discord role IDs the user currently holds in the guild (stored in session at login)
@@ -141,13 +168,22 @@ async function getUserAdminPerms(session, adminStore) {
         // Check if any Discord role grants apply to this user
         const applicableGrants = (grants || []).filter(g => userDiscordRoles.has(g.discordRoleId));
 
-        // No allowlist entry AND no applicable role grants → no access
-        if (!entry && !applicableGrants.length) return null;
+        // Check content perm groups that have an assigned role template
+        const pgRoles = contentGroups
+            .filter(g => g.roleId && (
+                (g.memberDiscordIds || []).includes(session.discordId) ||
+                (g.discordRoleIds   || []).some(rid => userDiscordRoles.has(rid))
+            ))
+            .map(g => roles.find(r => r.id === g.roleId))
+            .filter(Boolean);
 
-        // Build merged permissions from: direct entry perms + entry role templates + Discord role grants
+        // No access from any source → no perms
+        if (!entry && !applicableGrants.length && !pgRoles.length) return null;
+
+        // Build merged permissions from all sources
         let merged = Object.assign({}, (entry && entry.permissions) || {});
 
-        // Role templates assigned directly to this user
+        // Role templates assigned directly to this user via allowlist entry
         const directRoleIds = entry
             ? (Array.isArray(entry.roleIds) && entry.roleIds.length ? entry.roleIds : (entry.roleId ? [entry.roleId] : []))
             : [];
@@ -156,10 +192,15 @@ async function getUserAdminPerms(session, adminStore) {
             if (role && role.permissions) ALL_PERMS.forEach(k => { if (role.permissions[k]) merged[k] = true; });
         }
 
-        // Role templates mapped to the user's Discord roles
+        // Role templates mapped to the user's Discord roles via Discord role grants
         for (const grant of applicableGrants) {
             const role = roles.find(r => r.id === grant.roleId);
             if (role && role.permissions) ALL_PERMS.forEach(k => { if (role.permissions[k]) merged[k] = true; });
+        }
+
+        // Role templates granted via permission group membership
+        for (const role of pgRoles) {
+            ALL_PERMS.forEach(k => { if (role.permissions && role.permissions[k]) merged[k] = true; });
         }
 
         const perms = { superadmin: false };
@@ -298,15 +339,20 @@ async function sendAuditWebhook(adminId, action, details) {
         SET_MULTIPLIER:    0xC8A44A,
         RESET_WEEK:        0xE05252,
         REGENERATE_BOARD:  0x7C4AB8,
-        ROLE_CREATE:       0x4A9C72,
-        ROLE_UPDATE:       0x4A7FC8,
-        ROLE_DELETE:       0xE05252,
-        ALLOWLIST_ADD:     0x4A9C72,
-        ALLOWLIST_UPDATE:  0x4A7FC8,
-        ALLOWLIST_REMOVE:  0xE05252,
-        GAMEPOOL_UPDATE:   0x4A7FC8,
-        SET_TILE_POINTS:   0xC8A44A,
-        SET_TILE_EVENTTYPE:0xC8A44A
+        ROLE_CREATE:          0x4A9C72,
+        ROLE_UPDATE:          0x4A7FC8,
+        ROLE_DELETE:          0xE05252,
+        ALLOWLIST_ADD:        0x4A9C72,
+        ALLOWLIST_UPDATE:     0x4A7FC8,
+        ALLOWLIST_REMOVE:     0xE05252,
+        DISCORD_GRANT_ADD:    0x4A9C72,
+        DISCORD_GRANT_REMOVE: 0xE05252,
+        PERMGROUP_CREATE:     0x4A9C72,
+        PERMGROUP_UPDATE:     0x4A7FC8,
+        PERMGROUP_DELETE:     0xE05252,
+        GAMEPOOL_UPDATE:      0x4A7FC8,
+        SET_TILE_POINTS:      0xC8A44A,
+        SET_TILE_EVENTTYPE:   0xC8A44A
     };
 
     const color = actionColors[action] || 0x6B7280;
@@ -342,6 +388,7 @@ module.exports = {
     getUserAdminPerms,
     requirePerm,
     clearAdminCache,
+    clearContentPGCache,
     ALL_PERMS,
     json,
     getCurrentWeekNumber,

@@ -1284,6 +1284,9 @@ export function adminContentSave() {
     } else if (type === 'perm-groups') {
         body.name    = ((document.getElementById('cf-name')    || {}).value || '').trim();
         body.purpose = (document.getElementById('cf-purpose')  || {}).value || 'general';
+        // roleId: empty string means clear it (null), otherwise pass the selected role id
+        var pgRoleVal = (document.getElementById('cf-pg-role') || {}).value || '';
+        body.roleId = pgRoleVal || null;
         if (isEdit) {
             var addStr = ((document.getElementById('cf-addids') || {}).value || '');
             body.addIds = addStr.split(/[\s,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -1707,6 +1710,7 @@ function _buildContentForm(type, item) {
 
     } else if (type === 'perm-groups') {
         var members = item ? (item.memberDiscordIds || []) : [];
+        var availableRoles = _ADMIN.roles || [];
         html +=
             '<div class="cf-meta-row">' +
             '<div class="cf-field"><label class="cf-label">Group Name</label>' +
@@ -1718,6 +1722,17 @@ function _buildContentForm(type, item) {
                     (p === 'general' ? 'General' : p === 'docs' ? 'Document Access' : 'App Reviewer') + '</option>';
             }).join('') +
             '</select></div></div>';
+
+        // Role assignment — grants all permissions from the chosen role template to group members
+        html += '<div class="cf-field"><label class="cf-label">Assigned Role' +
+            '<span class="cf-optional"> — group members inherit all permissions from this role</span></label>' +
+            '<select id="cf-pg-role" class="admin-input">' +
+            '<option value="">— No role —</option>' +
+            availableRoles.map(function (r) {
+                var sel = item && item.roleId === r.id ? ' selected' : '';
+                return '<option value="' + esc(r.id) + '"' + sel + '>' + esc(r.name) + '</option>';
+            }).join('') +
+            '</select></div>';
 
         if (isEdit && members.length) {
             html += '<div class="cf-field"><label class="cf-label">Current Members</label>' +

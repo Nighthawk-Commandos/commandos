@@ -23,7 +23,7 @@ exports.handler = async function (event) {
         client_id:     clientId,
         redirect_uri:  base + '/api/auth/discord/callback',
         response_type: 'code',
-        scope:         'identify',
+        scope:         'identify guilds.members.read',
         state:         state
     });
 

@@ -69,10 +69,26 @@ async function getRobloxIdViaRowifi(discordId, guildId, apiKey) {
     return (data.roblox_id || data.robloxId || (data.data && data.data.roblox_id)) || null;
 }
 
-// ── Roblox helpers ───────────────────────────────────────────
-// Fetch the user's Discord role IDs in the guild — used for role-based permission grants.
-// Reuses ROWIFI_API_KEY (the Discord bot token) since it's already required.
-async function getDiscordGuildRoles(userId, guildId, botToken) {
+// ── Discord guild member role helpers ───────────────────────────
+// Primary: OAuth user token with guilds.members.read scope (reliable, no bot
+//          permission requirements).
+// Fallback: bot token via ROWIFI_API_KEY — requires Server Members Intent on
+//           the bot application, which may not always be enabled.
+async function getGuildMemberRoles(oauthToken, userId, guildId, botToken) {
+    // Try the user's own OAuth token first
+    if (oauthToken && guildId) {
+        try {
+            const res = await fetch(
+                `https://discord.com/api/users/@me/guilds/${guildId}/member`,
+                { headers: { Authorization: 'Bearer ' + oauthToken } }
+            );
+            if (res.ok) {
+                const member = await res.json();
+                if (Array.isArray(member.roles)) return member.roles;
+            }
+        } catch (_) {}
+    }
+    // Fallback: bot token (requires Server Members Intent)
     if (!botToken || !guildId) return [];
     try {
         const res = await fetch(
@@ -183,10 +199,11 @@ exports.handler = async function (event) {
         if (!robloxId) return redirectError('rowifi_not_linked');
 
         // 4. Roblox username, group ranks, and Discord guild roles (parallel)
+        // discordRoles uses OAuth token first (guilds.members.read scope), bot token as fallback.
         const [robloxUsername, ranks, discordRoles] = await Promise.all([
             getRobloxUsername(robloxId),
             getGroupRanks(robloxId),
-            getDiscordGuildRoles(discordUser.id, guildId, rowifiKey)
+            getGuildMemberRoles(accessToken, discordUser.id, guildId, rowifiKey)
         ]);
 
         // 5. Must be in division group — unless applicant-mode OR a bypassMember perm is granted

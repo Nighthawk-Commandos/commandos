@@ -11,13 +11,27 @@ function makeId(name) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
 }
 
+// The access-control perms are section-access gates, not admin sub-permissions.
+// Anyone with roleEdit (or superadmin) can grant them regardless of whether they
+// personally hold them — the same way a gatekeeper doesn't need to go through
+// every door they can unlock.
+const ACCESS_PERMS = new Set(['viewAdmin','viewObjectives','viewEventLog','editEventLog','bypassMember']);
+
 // Clamp permissions to what the actor is allowed to grant
 function sanitizePerms(requested, actorPerms) {
+    const canEditRoles = actorPerms.superadmin || actorPerms.roleEdit;
     const out = {};
     ALL_PERMS.forEach(k => {
-        out[k] = (k === 'roleAssign' || k === 'roleEdit')
-            ? !!(actorPerms.superadmin && requested && requested[k])
-            : !!(actorPerms[k] && requested && requested[k]);
+        if (k === 'roleAssign' || k === 'roleEdit') {
+            // System-level perms: superadmin only
+            out[k] = !!(actorPerms.superadmin && requested && requested[k]);
+        } else if (ACCESS_PERMS.has(k)) {
+            // Section-access perms: anyone with roleEdit can grant
+            out[k] = !!(canEditRoles && requested && requested[k]);
+        } else {
+            // All other admin sub-perms: actor must hold the perm themselves
+            out[k] = !!(actorPerms[k] && requested && requested[k]);
+        }
     });
     return out;
 }
