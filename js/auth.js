@@ -46,9 +46,7 @@ export var AUTH = {
             .catch(function () { _adminPerms = null; });
     },
 
-    isLoggedIn: function () {
-        return !!_user;
-    },
+    isLoggedIn: function () { return !!_user; },
     isInDivision: function () {
         return !!(_user && _user.divisionRank > 0);
     },
@@ -62,12 +60,26 @@ export var AUTH = {
     canAccessAdmin: function () {
         return AUTH.canAdminAny();
     },
+    canAccessEventStats: function () {
+        if (_user && _user.divisionRank >= 246) return true;
+        var p = _adminPerms;
+        return !!(p && p.eventsStats);
+    },
+    canAccessContent: function () {
+        if (_user && _user.divisionRank >= 246) return true;
+        var p = _adminPerms;
+        return !!(p && p.contentAdmin);
+    },
+    // Apply hub is always accessible — non-members authenticate via /api/auth/apply
+    canApply: function () { return true; },
+    // Docs hub is always accessible — server returns only public docs for non-members
+    canViewDocs: function () { return true; },
     canAdminAny: function () {
         if (_user && _user.divisionRank >= 246) return true;
         var p = _adminPerms;
         return !!(p && (p.roleAssign || p.roleEdit || p.disSync || p.disTiles ||
                         p.disPoints || p.disRaffle || p.disGamePool || p.disAudit ||
-                        p.mfOfficers || p.mfRemote));
+                        p.mfOfficers || p.mfRemote || p.eventsStats || p.contentAdmin));
     },
     canAdminTab: function (tab) {
         if (_user && _user.divisionRank >= 246) return true;
@@ -84,6 +96,8 @@ export var AUTH = {
         };
         if (tab === 'roles')     return !!(p.roleAssign || p.roleEdit);
         if (tab === 'mainframe') return !!(p.mfOfficers || p.mfRemote);
+        if (tab === 'content')   return !!p.contentAdmin;
+        if (tab === 'events')    return !!p.eventsStats;
         return !!p[map[tab]];
     },
     logout: function () {
@@ -94,7 +108,8 @@ export var AUTH = {
 // Called by app.js with the pre-fetched session from the boot
 // script so AUTH.load() can skip a second /api/auth/me fetch.
 export function initAuth(session) {
-    if (session !== undefined && session !== null) {
+    // Only accept sessions that represent a real authenticated user (must have discordId)
+    if (session && session.discordId) {
         _user   = session;
         _loaded = true;
     }

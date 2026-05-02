@@ -7,7 +7,7 @@
     <link rel="icon" href="https://i.imgur.com/YA7Ilep.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/styles.css?v=8">
 </head>
 <body>
@@ -117,68 +117,43 @@
             </div>
             <button class="profile-logout" id="sidebar-logout" title="Logout">↩</button>
         </div>
+        <div id="sidebar-version" class="sidebar-version" style="padding:6px 16px 10px"></div>
     </aside>
     <main id="main"><div id="content"></div></main>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<!-- Auth-gate: application scripts are only loaded after the session is
-     verified server-side. Unauthenticated visitors never receive any
-     application code, API endpoint paths, or cached data.
-     async=false keeps parallel downloads with guaranteed execution order. -->
+<!-- Boot: always load app.min.js. Public users (no session) see the public
+     landing; division members see the full private mainframe. The API
+     endpoints enforce their own auth — the session check here just lets the
+     app boot with pre-fetched user data so it avoids a second round-trip. -->
 <script>
 (function () {
+    // Capture any OAuth error param before it disappears
+    var errorKey = new URLSearchParams(location.search).get('error');
+    if (errorKey) {
+        window._BOOT_ERROR = errorKey;
+        history.replaceState(null, '', location.pathname);
+    }
+
     fetch('/api/auth/me', { credentials: 'same-origin' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (user) {
-            if (!user || user.authenticated === false) {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('login-screen').classList.remove('hidden');
-                return;
-            }
-            // Pass pre-fetched session — captured and deleted immediately by app.js initAuth()
-            window._BOOT_SESSION = user;
+            // Only pass the session if it's a real authenticated user (has discordId)
+        window._BOOT_SESSION = (user && user.discordId) ? user : null;
             var el = document.createElement('script');
             el.type = 'module';
             el.src  = './dist/app.min.js';
             document.head.appendChild(el);
         })
         .catch(function () {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('login-screen').classList.remove('hidden');
+            window._BOOT_SESSION = null;
+            var el = document.createElement('script');
+            el.type = 'module';
+            el.src  = './dist/app.min.js';
+            document.head.appendChild(el);
         });
-})();
-</script>
-
-<script>
-// ── Login screen error display + login button wiring ─────────
-(function () {
-    var errors = {
-        rowifi_not_linked: 'You must link your Discord to Roblox via RoWifi before accessing this system.',
-        rowifi_error:      'Failed to verify your Roblox account. Please try again later.',
-        not_in_group:      'You must be a member of the Nighthawk Commandos division (TNIC) to access this system.',
-        rank_too_low:      'Your rank is too low to access this system.',
-        auth_failed:       'Authentication failed. Please try again.',
-        unauthorized:      'You are not authorised to access this system.'
-    };
-    var errorKey = new URLSearchParams(location.search).get('error');
-    if (errorKey) {
-        var errEl  = document.getElementById('login-error');
-        var msgEl  = document.getElementById('login-error-msg');
-        var hintEl = document.getElementById('login-error-hint');
-        if (errEl && msgEl) {
-            msgEl.textContent = errors[errorKey] || errors['unauthorized'];
-            errEl.classList.remove('hidden');
-            if (errorKey === 'rowifi_not_linked' && hintEl) hintEl.classList.remove('hidden');
-        }
-        history.replaceState(null, '', location.pathname);
-    }
-    var loginBtn = document.getElementById('login-btn');
-    if (loginBtn) loginBtn.addEventListener('click', function () {
-        location.href = '/api/auth/discord';
-    });
-
 })();
 </script>
 </body>

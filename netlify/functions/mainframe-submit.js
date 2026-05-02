@@ -23,6 +23,7 @@ exports.handler = async (event) => {
     const scriptUrl = process.env.SCRIPT_URL;
     if (!scriptUrl) return json(500, { error: 'SCRIPT_URL not configured' });
 
+    if ((event.body || '').length > 16384) return json(413, { error: 'Request too large' });
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid JSON' }); }
 

@@ -14,15 +14,36 @@ import {
     setMembers, adminTab,
     adminPermToggle, adminEditRole, adminCancelEditRole,
     adminSaveRole, adminDeleteRole, adminShowNewRole,
+    adminContentNew, adminContentEdit, adminContentDelete, adminContentSave, adminContentCancel,
+    adminContentAddQuestion, adminContentRemoveQuestion, adminPGRemoveMember,
+    adminEditUserRoles, adminCloseUserPicker, adminShowAddUser, adminHideAddUser,
+    adminLoadDiscordGrants, adminAddDiscordGrant, adminRemoveDiscordGrant,
+    adminContentRemovePGRole,
     adminCancelNewRole, adminSaveNewRole,
     adminToggleUserRole, adminAddUser, adminRemoveUser,
     adminAddOfficer, adminRemoveOfficer,
     pickAdminOfficerAdd, pickAdminOfficerRm,
-    setActFilter
+    setActFilter,
+    cfQMoveUp, cfQMoveDown, cfQTypeChange, cfPGToggle,
+    cfQAddOption, cfQRemoveOption,
+    cfAddSection, cfRemoveSection, cfSectionFold, cfQFold,
+    cfTagAdd, cfTagRemove, cfColorPreview
 } from './render.js';
 import {
-    renderObjectivesSection, objGo
+    renderObjectivesSection, objGo, objRefresh
 } from './objectives.js';
+import { renderProfileSection } from './profile.js';
+import { renderDocsSection, docsOpenDoc } from './docs.js';
+import {
+    renderApplySection, renderApplyMineSection, renderApplyReviewSection,
+    applyNavGo, applyOpenForm, applyDecision, applyReviewSelectApp,
+    doApplicantLogin, applySectionBack, applyReviewSetStatus, applyFormSubmit
+} from './apply.js';
+import {
+    renderDivisionStatsSection, dsNavGo,
+    esSetPeriod, esApplyCustomRange,
+    auditLoadMore, dsAuditSearch, dsAuditAction
+} from './events-stats.js';
 import {
     renderDISSection, disLeave,
     disNavGo, disTriggerSync, disSetGlobalMultiplier,
@@ -30,6 +51,9 @@ import {
     disRegenerateBoard, disSetTileEventType, disSetTilePoints,
     disUnlockTile, disLockTile, disForceClaim,
     disAdjustPoints, disAdjustRaffle, disRunRaffle,
+    disResetUserPoints, disResetUserRaffle,
+    disResetAllPoints, disResetAllRaffle,
+    disBulkAdjustPoints, disBulkAdjustRaffle,
     disAddGame, disEditGame, disRemoveGame
 } from './dis.js';
 import {
@@ -52,6 +76,8 @@ initAuth(_bs);
 
 // Module-private data store — no window._D
 var _D = null;
+// Cached system version (deploy ID) — populated during boot
+var _sysVersion = null;
 
 // ── Content setter ────────────────────────────────────────────
 function setContent(html) {
@@ -65,7 +91,7 @@ var HOME_SECTIONS = [
         tag:      'MF',
         tagColor: 'var(--accent)',
         title:    'Commandos Mainframe',
-        desc:     'Activity & officer trackers, event logs, department data and submission forms.',
+        desc:     'Activity tracker, officer tracker, event logs, department rosters and submission forms.',
         accessFn: function () { return AUTH.isInDivision(); },
         lockMsg:  'Nighthawk Commandos division membership required.'
     },
@@ -74,25 +100,53 @@ var HOME_SECTIONS = [
         tag:      'OBJ',
         tagColor: '#4a7fc8',
         title:    'Division Objectives',
-        desc:     'Current monthly directives and per-department task tracking.',
+        desc:     'Monthly directives and department-level task assignments.',
         accessFn: function () { return AUTH.canAccessHigherSections(); },
-        lockMsg:  'Requires rank 243 (Officer) or above.'
+        lockMsg:  'Officer rank required.'
     },
     {
         id:       'deployment',
         tag:      'DIS',
         tagColor: '#7c4ab8',
         title:    'Deployment Incentive System',
-        desc:     'Competitive lock-out deployment grid — claim tiles by hosting events, earn raffle entries.',
+        desc:     'Host events to claim tiles on the deployment grid and earn raffle entries.',
         accessFn: function () { return AUTH.canSubmitOfficerForms(); },
-        lockMsg:  'Requires rank 235 (Officer) or above.'
+        lockMsg:  'Officer rank required.'
+    },
+    {
+        id:       'division-stats',
+        disabled: true,
+        tag:      'DIV',
+        tagColor: '#4a9c72',
+        title:    'Division Statistics',
+        desc:     'Event statistics, officer leaderboards and the group audit log.',
+        accessFn: function () { return AUTH.canAccessEventStats(); },
+        lockMsg:  'Senior officer or Event Stats permission required.'
+    },
+    {
+        id:       'docs',
+        tag:      'DOC',
+        tagColor: '#4a7fc8',
+        title:    'Document Hub',
+        desc:     'Official division documents — department SOPs, Officer Corps guidelines and reference materials.',
+        accessFn: function () { return AUTH.canViewDocs(); },
+        lockMsg:  'Division membership or document access required.'
+    },
+    {
+        id:       'apply',
+        tag:      'APP',
+        tagColor: '#c84a7c',
+        title:    'Application Hub',
+        desc:     'Apply for department positions, Officer Corps roles or Ghost slots. Track your applications.',
+        accessFn: function () { return AUTH.canApply(); },
+        lockMsg:  'Log in to view or submit applications.'
     },
     {
         id:       'admin',
         tag:      'ADM',
         tagColor: 'var(--red)',
         title:    'Admin Dashboard',
-        desc:     'System administration — role management, DIS moderation, audit logs.',
+        desc:     'Role management, DIS moderation, content administration and system audit logs.',
         accessFn: function () { return AUTH.canAdminAny(); },
         lockMsg:  'Admin access required.'
     }
@@ -102,27 +156,25 @@ var HOME_SECTIONS = [
 function renderHomeScreen() {
     var u = AUTH.user;
 
-    var cards = HOME_SECTIONS.map(function (s) {
+    var cards = HOME_SECTIONS.filter(function (s) { return !s.disabled; }).map(function (s) {
         var accessible = s.accessFn();
+        var color = s.tagColor;
         return '<div class="home-card' + (accessible ? '' : ' home-card-locked') + '"' +
+            ' style="--card-color:' + color + '"' +
             (accessible ? ' data-click="enterSection" data-section="' + s.id + '"' : '') + '>' +
+            '<div class="home-card-deco" aria-hidden="true">' + esc(s.tag) + '</div>' +
             '<div class="home-card-body">' +
             '<div class="home-card-title">' + esc(s.title) + '</div>' +
             '<div class="home-card-desc">' + esc(s.desc) + '</div>' +
             (accessible ? '' : '<div class="home-card-lock">' + esc(s.lockMsg) + '</div>') +
             (accessible ? '<button class="home-card-copy-btn" data-click="copyQuickLink" data-link="' + s.id + '" title="Copy quick link"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Copy link</button>' : '') +
             '</div>' +
-            (accessible ? '<div class="home-card-arrow">&#8594;</div>' : '') +
+            (accessible ? '<div class="home-card-arrow" style="color:' + color + '">&#8594;</div>' : '') +
             '</div>';
     }).join('');
 
-    var roleLine = u.divisionRoleName
-        ? 'Rank: ' + esc(u.divisionRoleName)
-        : 'Rank: ' + u.divisionRank;
-
-    var ghostLine = u.ghostRank > 0
-        ? 'Ghost Rank: ' + (u.ghostRoleName ? esc(u.ghostRoleName) : u.ghostRank)
-        : '';
+    var roleLine  = u.divisionRoleName ? esc(u.divisionRoleName) : '';
+    var ghostLine = u.ghostRank > 0 && u.ghostRoleName ? 'Ghost · ' + esc(u.ghostRoleName) : '';
 
     var discordAvatar = u.discordAvatar
         ? 'https://cdn.discordapp.com/avatars/' + u.discordId + '/' + u.discordAvatar + '.png'
@@ -132,13 +184,14 @@ function renderHomeScreen() {
     if (!hs) return;
     hs.innerHTML =
         '<div class="bg-grid"></div>' +
+        '<div class="home-bg-glow"></div>' +
         '<div class="home-inner">' +
         '<div class="home-header">' +
         '<div class="home-eyebrow">THE NIGHTHAWK IMPERIUM &mdash; NIGHTHAWK COMMANDOS</div>' +
         '<h1 class="home-title">Mainframe</h1>' +
         '<div class="home-divider"></div>' +
         '</div>' +
-        '<div class="home-profile">' +
+        '<div class="home-profile" data-click="enterSection" data-section="profile" title="View profile" style="cursor:pointer">' +
         '<div class="home-profile-avatar">' +
         '<img src="' + discordAvatar + '" alt="Discord Avatar">' +
         '</div>' +
@@ -161,8 +214,24 @@ function enterSection(el) {
     if (section === 'mainframe')           { enterMainframe(); }
     else if (section === 'div-objectives') { enterObjectives(); }
     else if (section === 'deployment')     { enterDIS(); }
+    else if (section === 'division-stats' || section === 'event-stats') { enterDivisionStats(); }
+    else if (section === 'docs')         { enterDocs(); }
+    else if (section === 'apply')        { enterApply(); }
+    else if (section === 'apply-review') { enterApplyReview(); }
+    else if (section === 'apply-mine')   { enterApplyMine(); }
+    else if (section === 'profile')      { enterProfile(); }
     else if (section === 'admin')          { enterAdmin(); }
 }
+
+function enterDivisionStats() {
+    if (!AUTH.canAccessEventStats()) return;
+    renderDivisionStatsSection();
+}
+function enterDocs()        { if (!AUTH.canViewDocs()) return; renderDocsSection(); }
+function enterApply()       { if (!AUTH.canApply()) return; renderApplySection(); }
+function enterApplyMine()   { if (!AUTH.canApply()) return; renderApplyMineSection(); }
+function enterApplyReview() { if (!AUTH.canApply()) return; renderApplyReviewSection(); }
+function enterProfile()     { if (!AUTH.isLoggedIn()) return; renderProfileSection(); }
 
 function enterAdmin() {
     if (!AUTH.canAdminAny()) return;
@@ -190,20 +259,19 @@ function enterDIS() {
 function showHomeScreen() {
     var appEl = document.getElementById('app');
     var hbg   = document.getElementById('hbg');
-    if (appEl && !appEl.classList.contains('hidden')) {
-        appEl.classList.add('hidden');
-    }
+    if (appEl && !appEl.classList.contains('hidden')) appEl.classList.add('hidden');
     if (hbg) hbg.style.display = 'none';
 
     disLeave();
 
     var hs = document.getElementById('home-screen');
-    if (hs) {
-        hs.className = '';
-        hs.removeAttribute('style');
-    }
+    if (hs) { hs.className = ''; hs.removeAttribute('style'); }
 
-    requestAnimationFrame(renderHomeScreen);
+    if (AUTH.isInDivision()) {
+        requestAnimationFrame(renderHomeScreen);
+    } else {
+        requestAnimationFrame(renderPublicScreen);
+    }
 }
 
 function doLogout() { AUTH.logout(); }
@@ -313,11 +381,11 @@ function populateProfileCard() {
     var nameEl = document.getElementById('profile-name');
     var rankEl = document.getElementById('profile-rank');
     var card   = document.getElementById('profile-card');
+    var verEl  = document.getElementById('sidebar-version');
     if (nameEl) nameEl.textContent = u.robloxUsername || u.discordUsername;
-    if (rankEl) rankEl.textContent = u.divisionRoleName
-        ? u.divisionRoleName + ' \u00b7 '
-        : 'Rank ' + u.divisionRank;
+    if (rankEl) rankEl.textContent = u.divisionRoleName || '';
     if (card) card.style.display = 'flex';
+    if (verEl && _sysVersion) verEl.textContent = _sysVersion;
 }
 
 // ── Global event delegation ───────────────────────────────────
@@ -353,10 +421,13 @@ function _dispatch(fn, el, e) {
         case 'enterSection':    enterSection(el); break;
         case 'doLogout':        doLogout(); break;
         case 'showHomeScreen':  showHomeScreen(); break;
+        case 'doMemberLogin':    doMemberLogin(); break;
+        case 'doApplicantLogin': doApplicantLogin(el); break;
         // Activity filter — pass members so setActFilter doesn't need window._D
         case 'setActFilter':    if (_D) setActFilter(d.filter, el, _D.activity.members); break;
         // Objectives
         case 'objGo':           objGo(el); break;
+        case 'objRefresh':      objRefresh(); break;
         // DIS nav
         case 'disNavGo':        disNavGo(el); break;
         // Admin tabs
@@ -377,7 +448,136 @@ function _dispatch(fn, el, e) {
         // Admin users
         case 'adminAddUser':        adminAddUser(); break;
         case 'adminRemoveUser':     adminRemoveUser(d.id); break;
-        case 'adminToggleUserRole': adminToggleUserRole(el, d.id); break;
+        case 'adminToggleUserRole':         adminToggleUserRole(el, d.id); break;
+        case 'adminContentNew':             adminContentNew(el); break;
+        case 'adminContentEdit':            adminContentEdit(el); break;
+        case 'adminContentDelete':          adminContentDelete(el); break;
+        case 'adminContentSave':            adminContentSave(); break;
+        case 'adminContentCancel':          adminContentCancel(); break;
+        case 'adminContentAddQuestion':     adminContentAddQuestion(el); break;
+        case 'adminContentRemoveQuestion':  adminContentRemoveQuestion(el); break;
+        case 'cfQMoveUp':      cfQMoveUp(el); break;
+        case 'cfQMoveDown':    cfQMoveDown(el); break;
+        case 'cfPGToggle':     cfPGToggle(el); break;
+        case 'cfQAddOption':    cfQAddOption(el); break;
+        case 'cfQRemoveOption': cfQRemoveOption(el); break;
+        case 'cfAddSection':    cfAddSection(); break;
+        case 'cfRemoveSection': cfRemoveSection(el); break;
+        case 'cfSectionFold':   cfSectionFold(el); break;
+        case 'cfQFold':         cfQFold(el); break;
+        case 'cfTagAdd':        cfTagAdd(); break;
+        case 'cfTagRemove':     cfTagRemove(el); break;
+        case 'docCmd': {
+            e.preventDefault();
+            var cmd = el.dataset.cmd; var val = el.dataset.val || null;
+            if (cmd === 'createLink') {
+                val = prompt('URL:');
+                if (!val) break;
+            }
+            document.execCommand(cmd, false, val);
+            break;
+        }
+        case 'docInsertTemplate': {
+            var ed = document.getElementById('cf-content');
+            if (!ed) break;
+            if (ed.innerHTML.replace(/<br\s*\/?>/gi, '').trim() &&
+                !confirm('Replace current content with the TNIC template?')) break;
+            var variantEl = document.getElementById('doc-template-variant');
+            var variant   = variantEl ? variantEl.value : 'standard';
+
+            // ── Variant config ──────────────────────────────────────
+            var isGhost = variant === 'ghost';
+            var DEPT_MEDALLION = {
+                'standard':        '/assets/MedallionLogo_Watermark.png',
+                'ghost':           '/assets/GhostMedallion.png',
+                'progression':     '/assets/ProgressionMedallion.png',
+                'welfare':         '/assets/WelfareMedallion.png',
+                'librarium':       '/assets/LibrariumMedallion.png',
+                'internal-affairs':'/assets/Internal Affairs.png'
+            };
+            var DEPT_NAMES = {
+                'standard':'Nighthawk Commandos',
+                'ghost':'Ghost Division',
+                'progression':'Progression Department',
+                'welfare':'Welfare Department',
+                'librarium':'Librarium Department',
+                'internal-affairs':'Internal Affairs'
+            };
+            var logoImg   = isGhost ? '/assets/GhostWings.png' : '/assets/DocumentLogo_Wings.png';
+            var medallion = DEPT_MEDALLION[variant] || DEPT_MEDALLION['standard'];
+            var deptName  = DEPT_NAMES[variant] || 'Nighthawk Commandos';
+
+            // Banners: Ghost uses dark purple gradient, all others use the banner assets.
+            // Negative margins extend past the editor padding; the .doc-editor-wrap scroll
+            // container now sits outside the editor itself so overflow doesn't clip them.
+            var _bannerStyle = 'display:block;width:calc(100% + 96px);height:14px;object-fit:fill;';
+            var topBanner = isGhost
+                ? '<div style="background:linear-gradient(90deg,#2d0a4e,#6b21a8);height:14px;margin:-32px -48px 24px"></div>'
+                : '<img src="/assets/PageTopBanner" style="' + _bannerStyle + 'margin:-32px -48px 24px" alt="">';
+            var botBanner = isGhost
+                ? '<div style="background:linear-gradient(90deg,#6b21a8,#2d0a4e);height:14px;margin:24px -48px -32px"></div>'
+                : '<img src="/assets/PageBottomBanner" style="' + _bannerStyle + 'margin:24px -48px -32px" alt="">';
+
+            var _now = new Date();
+            var _todayFmt = String(_now.getDate()).padStart(2,'0') + '/' +
+                            String(_now.getMonth()+1).padStart(2,'0') + '/' +
+                            _now.getFullYear();
+
+            // Division name is always "Nighthawk Commandos"; deptName is the sub-division.
+            // For the standard variant they are the same, so only show dept line for others.
+            var isStandard = variant === 'standard';
+
+            ed.innerHTML =
+                topBanner +
+                // ── Full-width wings logo spanning the document ──────────
+                '<div style="text-align:center;margin-bottom:6px">' +
+                '<img src="' + logoImg + '" style="display:block;width:100%;max-height:72px;object-fit:contain" alt="Wings">' +
+                '</div>' +
+                // ── Title block: division > department > document name ───
+                '<div style="text-align:center;font-family:\'Source Sans Pro\',Arial,sans-serif;line-height:1.5;margin-bottom:16px">' +
+                '<div style="font-size:15px;font-weight:700;color:#111;letter-spacing:.04em;text-transform:uppercase">Nighthawk Commandos</div>' +
+                (!isStandard ? '<div style="font-size:18px;font-weight:700;color:#4a86e8">' + deptName + '</div>' : '') +
+                '<div style="font-size:22px;font-weight:700;color:#073763;font-family:\'Cinzel Decorative\',Georgia,serif">Document Title</div>' +
+                '</div>' +
+                '<hr style="border:none;border-top:2px solid #0b5394;margin:0 0 14px">' +
+                // ── Table of Contents ────────────────────────────────────
+                '<div style="font-family:\'Source Sans Pro\',Arial,sans-serif;font-size:12px;margin-bottom:14px">' +
+                '<div style="font-weight:700;color:#0b5394;margin-bottom:5px;font-size:11px;letter-spacing:.08em;text-transform:uppercase">Table of Contents</div>' +
+                '<div style="display:flex;justify-content:space-between;border-bottom:1px dotted #ccc;padding:2px 0"><span>Introduction</span><span style="color:#666">2</span></div>' +
+                '<div style="display:flex;justify-content:space-between;border-bottom:1px dotted #ccc;padding:2px 0"><span>#1 section</span><span style="color:#666">2</span></div>' +
+                '<div style="display:flex;justify-content:space-between;padding:2px 0 2px 18px"><span>#2 sub section</span><span style="color:#666">2</span></div>' +
+                '</div>' +
+                '<hr style="border:none;border-top:1px solid #ccc;margin:4px 0 18px">' +
+                // ── Body content with medallion watermark ────────────────
+                '<div style="position:relative;min-height:400px">' +
+                '<img src="' + medallion + '" style="position:absolute;top:40px;left:50%;transform:translateX(-50%);width:340px;height:340px;object-fit:contain;opacity:.05;pointer-events:none;user-select:none" alt="">' +
+                '<h1>Introduction</h1>' +
+                '<p>Write your introduction here.</p>' +
+                '<hr style="border:none;border-top:1px solid #ccc;margin:16px 0">' +
+                '<h1>#1 section</h1>' +
+                '<p></p>' +
+                '<h2>#2 sub section</h2>' +
+                '<p></p>' +
+                '<hr style="border:none;border-top:1px solid #ccc;margin:16px 0">' +
+                // ── Signature block ──────────────────────────────────────
+                '<p style="text-align:right;font-size:11px;color:#444;margin-top:100px;line-height:1.9">' +
+                '(DATE)<br>Signed,<br><br>' +
+                '(RANK), ________________________<br>' +
+                '(RELEVANT TITLES)<br>[Honorary Mentions]<br><br>' +
+                '<span style="font-size:9px;font-family:monospace;color:#1c4587">Last Update ' + _todayFmt + '</span>' +
+                '</p></div>' +
+                botBanner;
+            break;
+        }
+        case 'adminPGRemoveMember':         adminPGRemoveMember(el); break;
+        case 'adminEditUserRoles':          adminEditUserRoles(el); break;
+        case 'adminCloseUserPicker':        adminCloseUserPicker(el); break;
+        case 'adminShowAddUser':            adminShowAddUser(); break;
+        case 'adminHideAddUser':            adminHideAddUser(); break;
+        case 'adminLoadDiscordGrants':      adminLoadDiscordGrants(); break;
+        case 'adminAddDiscordGrant':        adminAddDiscordGrant(); break;
+        case 'adminRemoveDiscordGrant':     adminRemoveDiscordGrant(el); break;
+        case 'adminContentRemovePGRole':    adminContentRemovePGRole(el); break;
         // Forms — Event Log
         case 'resetEL':  resetEL(); break;
         case 'submitEL': submitEL(); break;
@@ -415,7 +615,7 @@ function _dispatch(fn, el, e) {
         // DIS
         case 'copyQuickLink': {
             e.stopPropagation();
-            var url = location.origin + '/?link=' + encodeURIComponent(d.link);
+            var url = location.origin + '/share?link=' + encodeURIComponent(d.link);
             navigator.clipboard.writeText(url)
                 .then(function () { toast('Link copied!', 'success'); })
                 .catch(function () { toast('Failed to copy', 'error'); });
@@ -438,18 +638,50 @@ function _dispatch(fn, el, e) {
         case 'disUnlockTile':          disUnlockTile(+d.pos); break;
         case 'disLockTile':            disLockTile(+d.pos); break;
         case 'disForceClaim':          disForceClaim(+d.pos); break;
+        case 'dsNavGo':                dsNavGo(el); break;
+        case 'docsOpenDoc':            docsOpenDoc(el); break;
+        case 'applyNavGo':             applyNavGo(el); break;
+        case 'applyOpenForm':          applyOpenForm(el); break;
+        case 'applyDecision':          applyDecision(el); break;
+        case 'applyReviewSelectApp':   applyReviewSelectApp(el); break;
+        case 'applySectionBack':       applySectionBack(); break;
+        case 'applyReviewSetStatus':   applyReviewSetStatus(el); break;
+        case 'esSetPeriod':            esSetPeriod(el); break;
+        case 'esApplyCustomRange':     esApplyCustomRange(); break;
+        case 'auditLoadMore':          auditLoadMore(); break;
+        case 'dsAuditSearch':          dsAuditSearch(el); break;
+        case 'dsAuditAction':          dsAuditAction(el); break;
         case 'disAdjustPoints':        disAdjustPoints(); break;
         case 'disAdjustRaffle':        disAdjustRaffle(); break;
         case 'disRunRaffle':           disRunRaffle(); break;
+        case 'disResetUserPoints':     disResetUserPoints(d.user); break;
+        case 'disResetUserRaffle':     disResetUserRaffle(d.user); break;
+        case 'disResetAllPoints':      disResetAllPoints(); break;
+        case 'disResetAllRaffle':      disResetAllRaffle(); break;
+        case 'disBulkAdjustPoints':    disBulkAdjustPoints(); break;
+        case 'disBulkAdjustRaffle':    disBulkAdjustRaffle(); break;
         case 'disAddGame':             disAddGame(); break;
         case 'disEditGame':            disEditGame(+d.idx); break;
         case 'disRemoveGame':          disRemoveGame(+d.idx); break;
+        case 'cfQTypeChange':   cfQTypeChange(el); break;
+        case 'cfColorPreview':  cfColorPreview(el); break;
+        case 'docFmtBlock': {
+            document.execCommand('formatBlock', false, '<' + el.value + '>');
+            break;
+        }
     }
 }
 
 document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-click]');
     if (el) _dispatch(el.dataset.click, el, e);
+});
+// Handle application form submission globally — covers all sections
+document.addEventListener('submit', function (e) {
+    if (e.target && e.target.id === 'apply-form') {
+        e.preventDefault();
+        applyFormSubmit();
+    }
 });
 document.addEventListener('change', function (e) {
     var el = e.target.closest('[data-change]');
@@ -463,6 +695,53 @@ document.addEventListener('focus', function (e) {
     var el = e.target.closest('[data-focus]');
     if (el) _dispatch(el.dataset.focus, el, e);
 }, true);
+
+// ── WYSIWYG backspace: remove block format before merging lines ─
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Backspace') return;
+    var editor = document.querySelector('.doc-editor');
+    if (!editor) return;
+    var active = document.activeElement;
+    if (active !== editor && !editor.contains(active)) return;
+
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    var range = sel.getRangeAt(0);
+    if (!range.collapsed) return;
+
+    // Find the nearest block ancestor inside the editor
+    var node = range.startContainer;
+    var block = null;
+    while (node && node !== editor) {
+        if (node.nodeType === 1) {
+            var tag = node.nodeName.toLowerCase();
+            if (tag === 'blockquote' || tag === 'pre') { block = node; break; }
+        }
+        node = node.parentNode;
+    }
+
+    if (block) {
+        // Only intercept when cursor is at position 0 of the block's first text
+        var blockRange = document.createRange();
+        blockRange.selectNodeContents(block);
+        blockRange.collapse(true);
+        if (range.compareBoundaryPoints(Range.START_TO_START, blockRange) === 0) {
+            e.preventDefault();
+            document.execCommand('formatBlock', false, '<p>');
+        }
+        return;
+    }
+
+    // HR: if previous sibling of current block is an HR, remove the HR first
+    var curBlock = range.startContainer;
+    while (curBlock && curBlock.parentNode !== editor) curBlock = curBlock.parentNode;
+    if (curBlock && curBlock.previousElementSibling && curBlock.previousElementSibling.nodeName === 'HR') {
+        if (range.startOffset === 0) {
+            e.preventDefault();
+            curBlock.previousElementSibling.remove();
+        }
+    }
+});
 
 // ── Static DOM wiring ─────────────────────────────────────────
 // Script is dynamically injected after auth, so DOMContentLoaded has already
@@ -512,6 +791,12 @@ function _handleQuickLink() {
     if (link === 'mainframe')      { enterMainframe(); return; }
     if (link === 'div-objectives') { enterObjectives(); return; }
     if (link === 'deployment')     { enterDIS(); return; }
+    if (link === 'division-stats' || link === 'event-stats') { enterDivisionStats(); return; }
+    if (link === 'docs')         { enterDocs(); return; }
+    if (link === 'apply')        { enterApply(); return; }
+    if (link === 'apply-review') { enterApplyReview(); return; }
+    if (link === 'apply-mine')   { enterApplyMine(); return; }
+    if (link === 'profile')      { enterProfile(); return; }
     if (link === 'admin')          { enterAdmin(); return; }
 }
 
@@ -550,15 +835,101 @@ function loadMainframe() {
         });
 }
 
+// ── Public landing screen (no auth / applicant mode) ─────────
+var _AUTH_ERRORS = {
+    rowifi_not_linked: 'Your Discord is not linked to Roblox via RoWifi.',
+    rowifi_error:      'Failed to verify your Roblox account. Try again later.',
+    not_in_group:      'You are not a Nighthawk Commandos division member.',
+    rank_too_low:      'Your rank is too low to access the member mainframe.',
+    auth_failed:       'Authentication failed. Please try again.',
+    unauthorized:      'Authorisation failed. Division membership is required.'
+};
+
+function renderPublicScreen() {
+    var hs = document.getElementById('home-screen');
+    if (!hs) return;
+
+    var u   = AUTH.user;
+    var err = window._BOOT_ERROR;
+    window._BOOT_ERROR = null;
+
+    var errorBanner = '';
+    if (err) {
+        var msg = _AUTH_ERRORS[err] || _AUTH_ERRORS['unauthorized'];
+        var hint = err === 'rowifi_not_linked'
+            ? ' Visit <a href="https://rowifi.xyz" target="_blank" rel="noopener" class="link-accent">rowifi.xyz</a> to link your accounts.' : '';
+        errorBanner = '<div class="pub-error-banner">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+            '<span>' + esc(msg) + (hint ? '<br><span style="opacity:.7;font-size:11px">' + hint + '</span>' : '') + '</span>' +
+            '</div>';
+    }
+
+    var displayName = u
+        ? (u.discordUsername || u.robloxUsername || ('Discord ' + String(u.discordId || '').slice(-4))) : '';
+    var greeting = displayName
+        ? '<div class="pub-greeting">Logged in as <strong>' + esc(displayName) + '</strong>' +
+          (u && u.applicantMode ? ' <span class="pub-applicant-badge">Applicant</span>' : '') +
+          ' · <button class="pub-link-btn" data-click="doLogout">Log out</button></div>'
+        : '';
+
+    hs.className = '';
+    hs.innerHTML =
+        '<div class="bg-grid"></div>' +
+        '<div class="home-bg-glow"></div>' +
+        '<div class="pub-wrap">' +
+            errorBanner +
+            '<div class="pub-header">' +
+                '<div class="pub-eyebrow">THE NIGHTHAWK IMPERIUM — NIGHTHAWK COMMANDOS</div>' +
+                '<h1 class="pub-title">Mainframe</h1>' +
+                '<div class="pub-subtitle">Documents and applications open to all — division login for full access.</div>' +
+                greeting +
+            '</div>' +
+            '<div class="pub-grid">' +
+                '<div class="pub-card" data-click="enterSection" data-section="docs">' +
+                    '<div class="pub-card-accent" style="background:#4a7fc8"></div>' +
+                    '<div class="pub-card-title">Document Hub</div>' +
+                    '<div class="pub-card-desc">Department SOPs, Officer Corps guidelines and official division reference materials.</div>' +
+                    '<div class="pub-card-cta">Browse Documents →</div>' +
+                '</div>' +
+                '<div class="pub-card" data-click="enterSection" data-section="apply">' +
+                    '<div class="pub-card-accent" style="background:#c84a7c"></div>' +
+                    '<div class="pub-card-title">Application Hub</div>' +
+                    '<div class="pub-card-desc">Apply for department positions, Officer Corps roles or Ghost slots. Track submitted applications.</div>' +
+                    '<div class="pub-card-cta">View Applications →</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="pub-member-cta">' +
+                '<div class="pub-member-label">Nighthawk Commandos member?</div>' +
+                '<button class="pub-member-btn" data-click="doMemberLogin">' +
+                    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+                    'Member Login' +
+                '</button>' +
+                (_sysVersion ? '<div class="pub-version">' + esc(_sysVersion) + '</div>' : '') +
+            '</div>' +
+        '</div>';
+}
+
+function doMemberLogin() {
+    var linkParam = new URLSearchParams(location.search).get('link');
+    location.href = '/api/auth/discord' + (linkParam ? '?link=' + encodeURIComponent(linkParam) : '');
+}
+
 // ── Boot ──────────────────────────────────────────────────────
 Promise.all([
     AUTH.load(),
     API.checkVersion()
 ]).then(function (results) {
     var user = results[0];
+    var ver  = results[1];
+    if (ver && ver.v) _sysVersion = 'v' + ver.v.slice(0, 8);
+    window._sysVersion = _sysVersion;
     document.getElementById('loading').classList.add('hidden');
-    if (!user) {
-        document.getElementById('login-screen').classList.remove('hidden');
+
+    if (!user || !AUTH.isInDivision()) {
+        // Public mode — unauthenticated or applicant-only session
+        document.getElementById('home-screen').classList.remove('hidden');
+        renderPublicScreen();
+        if (_quickLink) _handleQuickLink();
     } else {
         AUTH.loadAdminPerms().then(function () {
             document.getElementById('home-screen').classList.remove('hidden');

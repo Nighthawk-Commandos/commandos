@@ -219,6 +219,9 @@ function validate(){
   }
   if(!ok)return false;
   document.getElementById('sb').disabled=true;document.getElementById('sb').textContent='Processing...';
+  var l=document.getElementById('loader');
+  l.style.display='';l.style.opacity='';l.classList.remove('gone');
+  var ls=l.querySelector('.ls');if(ls)ls.textContent='Processing…';
   return true;
 }
 <\/script>`;

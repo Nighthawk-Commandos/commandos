@@ -31,11 +31,19 @@ exports.handler = async function (event) {
         ? 'HttpOnly; SameSite=Lax; Path=/; Max-Age=300'
         : 'HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300';
 
+    // Preserve optional return-to link (e.g. ?link=admin) through the OAuth round-trip.
+    // Validated strictly so it can never be used as an open redirect.
+    const rawLink  = (event.queryStringParameters || {}).link || '';
+    const safeLink = /^[a-zA-Z0-9_-]{1,60}$/.test(rawLink) ? rawLink : '';
+
+    const cookies = [`cmd_oauth_state=${state}; ${cookieFlags}`];
+    if (safeLink) cookies.push(`cmd_oauth_return=${safeLink}; ${cookieFlags}`);
+
     return {
         statusCode: 302,
-        headers: {
-            Location:   'https://discord.com/api/oauth2/authorize?' + params.toString(),
-            'Set-Cookie': `cmd_oauth_state=${state}; ${cookieFlags}`
+        multiValueHeaders: {
+            Location:    ['https://discord.com/api/oauth2/authorize?' + params.toString()],
+            'Set-Cookie': cookies
         },
         body: ''
     };

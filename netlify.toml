@@ -9,6 +9,11 @@ NODE_VERSION = "20"
 
 # ── Auth API redirects (must be before the SPA catch-all) ──────
 [[redirects]]
+from   = "/api/auth/apply"
+to     = "/.netlify/functions/auth-apply"
+status = 200
+
+[[redirects]]
 from   = "/api/auth/discord"
 to     = "/.netlify/functions/auth-login"
 status = 200
@@ -98,6 +103,69 @@ from   = "/api/version"
 to     = "/.netlify/functions/version"
 status = 200
 
+# ── Share / Discord embed handler ──────────────────────────────
+[[redirects]]
+from   = "/share"
+to     = "/.netlify/functions/share"
+status = 200
+
+# ── Division Statistics API ─────────────────────────────────────
+[[redirects]]
+from   = "/api/division/audit"
+to     = "/.netlify/functions/division-audit"
+status = 200
+
+# ── Events stats API ────────────────────────────────────────────
+[[redirects]]
+from   = "/api/events/all"
+to     = "/.netlify/functions/events-all"
+status = 200
+
+[[redirects]]
+from   = "/api/events/summary"
+to     = "/.netlify/functions/events-summary"
+status = 200
+
+[[redirects]]
+from   = "/api/events/by-type"
+to     = "/.netlify/functions/events-by-type"
+status = 200
+
+[[redirects]]
+from   = "/api/events/top-hosts"
+to     = "/.netlify/functions/events-top-hosts"
+status = 200
+
+[[redirects]]
+from   = "/api/events/top-attendees"
+to     = "/.netlify/functions/events-top-attendees"
+status = 200
+
+[[redirects]]
+from   = "/api/events/monthly-attendance"
+to     = "/.netlify/functions/events-monthly-attendance"
+status = 200
+
+[[redirects]]
+from   = "/api/events/leaderboard/hosts"
+to     = "/.netlify/functions/events-leaderboard"
+status = 200
+
+[[redirects]]
+from   = "/api/events/leaderboard/op"
+to     = "/.netlify/functions/events-leaderboard"
+status = 200
+
+[[redirects]]
+from   = "/api/events/leaderboard/attendees"
+to     = "/.netlify/functions/events-leaderboard"
+status = 200
+
+[[redirects]]
+from   = "/api/events/leaderboard/ap"
+to     = "/.netlify/functions/events-leaderboard"
+status = 200
+
 # ── DIS API redirects ───────────────────────────────────────────
 [[redirects]]
 from   = "/api/dis/state"
@@ -117,6 +185,54 @@ status = 200
 [[redirects]]
 from   = "/api/dis/gamepool"
 to     = "/.netlify/functions/dis-gamepool"
+status = 200
+
+# ── Document hub ────────────────────────────────────────────────
+[[redirects]]
+from   = "/api/docs/list"
+to     = "/.netlify/functions/docs-list"
+status = 200
+
+[[redirects]]
+from   = "/api/docs/view"
+to     = "/.netlify/functions/docs-view"
+status = 200
+
+# ── Application hub ──────────────────────────────────────────────
+[[redirects]]
+from   = "/api/apply/list"
+to     = "/.netlify/functions/apply-list"
+status = 200
+
+[[redirects]]
+from   = "/api/apply/submit"
+to     = "/.netlify/functions/apply-submit"
+status = 200
+
+[[redirects]]
+from   = "/api/apply/mine"
+to     = "/.netlify/functions/apply-mine"
+status = 200
+
+# ── Content admin ────────────────────────────────────────────────
+[[redirects]]
+from   = "/api/admin/docs"
+to     = "/.netlify/functions/admin-docs"
+status = 200
+
+[[redirects]]
+from   = "/api/admin/apps"
+to     = "/.netlify/functions/admin-apps"
+status = 200
+
+[[redirects]]
+from   = "/api/admin/perm-groups"
+to     = "/.netlify/functions/admin-perm-groups"
+status = 200
+
+[[redirects]]
+from   = "/api/admin/app-review"
+to     = "/.netlify/functions/admin-app-review"
 status = 200
 
 # ── Policy pages ──────────────────────────────────────────────
@@ -141,6 +257,24 @@ status = 200
 from   = "/*"
 to     = "/404.html"
 status = 404
+
+# ── Asset headers ──────────────────────────────────────────────
+[[headers]]
+for = "/assets/PageTopBanner"
+[headers.values]
+Content-Type = "image/svg+xml"
+Cache-Control = "public, max-age=86400"
+
+[[headers]]
+for = "/assets/PageBottomBanner"
+[headers.values]
+Content-Type = "image/svg+xml"
+Cache-Control = "public, max-age=86400"
+
+[[headers]]
+for = "/assets/*"
+[headers.values]
+Cache-Control = "public, max-age=86400"
 
 # ── Cache headers ──────────────────────────────────────────────
 [[headers]]
@@ -173,4 +307,4 @@ X-Frame-Options        = "DENY"
 X-Content-Type-Options = "nosniff"
 Referrer-Policy        = "strict-origin-when-cross-origin"
 Permissions-Policy     = "camera=(), microphone=(), geolocation=()"
-Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com https://cdn.discordapp.com https://media.discordapp.net data:; connect-src 'self';"
+Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com https://themes.googleusercontent.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://i.imgur.com https://cdn.discordapp.com https://media.discordapp.net data: blob:; connect-src 'self';"

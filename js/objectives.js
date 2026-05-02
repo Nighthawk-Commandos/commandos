@@ -82,6 +82,20 @@ function _activeTasks(tasks) {
     return (tasks || []).filter(function (t) { return !_isExpired(t); });
 }
 
+// ── Refresh (clears cache and re-fetches) ─────────────────────
+export function objRefresh() {
+    _objMemCache = null;
+    _objMemExp   = 0;
+    try { localStorage.removeItem(_OBJ_CACHE_KEY); } catch (_) {}
+    var btn = document.getElementById('obj-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+    var content = document.getElementById('obj-content');
+    if (content) content.innerHTML = '<div class="obj-load-state">Refreshing objectives…</div>';
+    _objFetch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+    });
+}
+
 // ── Entry point ───────────────────────────────────────────────
 export function renderObjectivesSection() {
     _objView = 'overview';
@@ -113,13 +127,10 @@ export function renderObjectivesSection() {
 function _objShellHTML() {
     return '' +
         '<div class="bg-grid"></div>' +
-        '<aside class="obj-sidebar" id="obj-sidebar">' +
+        '<aside class="obj-sidebar" id="obj-sidebar" data-accent="blue">' +
         '  <div class="obj-sidebar-logo">' +
         '    <div class="obj-sidebar-label">Nighthawk Commandos</div>' +
         '    <div class="obj-sidebar-title">TNIC<br>Objectives</div>' +
-        '  </div>' +
-        '  <div class="obj-sidebar-back">' +
-        '    <button class="obj-hub-btn" data-click="showHomeScreen">&#8592; Hub</button>' +
         '  </div>' +
         '  <nav class="obj-nav" id="obj-nav">' +
         '    <div class="obj-nav-group">Overview</div>' +
@@ -128,6 +139,11 @@ function _objShellHTML() {
         '    </div>' +
         '    <div class="obj-nav-group">Departments</div>' +
         '  </nav>' +
+        '  <div class="obj-sidebar-back">' +
+        '    <button class="obj-hub-btn" data-click="showHomeScreen">← Back to Hub</button>' +
+        '    <button class="obj-refresh-btn" id="obj-refresh-btn" data-click="objRefresh">↻ Refresh</button>' +
+        (window._sysVersion ? '    <div class="sidebar-version">' + window._sysVersion + '</div>' : '') +
+        '  </div>' +
         '</aside>' +
         '<main class="obj-main" id="obj-main">' +
         '  <div id="obj-content"><div class="obj-load-state">Loading objectives&#8230;</div></div>' +

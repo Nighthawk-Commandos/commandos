@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 'use strict';
 
-const { fireStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
+const { fireStore, verifySession, getUserAdminPerms, clearAdminCache, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
 
 // Clamp requested permissions to what the actor is allowed to grant.
 function sanitizePerms(requested, actorPerms) {
@@ -67,6 +67,7 @@ exports.handler = async function (event) {
             return json(403, { error: 'Requires roleAssign permission' });
         }
 
+        if ((event.body || '').length > 4096) return json(413, { error: 'Request too large' });
         let body;
         try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'invalid_body' }); }
         const { discordId, label, permissions } = body;
@@ -85,7 +86,11 @@ exports.handler = async function (event) {
             if (invalidIds.length) return json(400, { error: 'Unknown role IDs: ' + invalidIds.join(', ') });
             if (!actorPerms.superadmin) {
                 for (const roleId of roleIds) {
-                    const role     = existingRoles.find(r => r.id === roleId);
+                    const role = existingRoles.find(r => r.id === roleId);
+                    // Block assignment of superadmin-only roles by non-superadmins
+                    if (role && role.superadminOnly) {
+                        return json(403, { error: 'Role "' + role.name + '" can only be assigned by a superadmin' });
+                    }
                     const badPerms = role && role.permissions
                         ? ALL_PERMS.filter(k => role.permissions[k] && !actorPerms[k])
                         : [];
@@ -104,6 +109,7 @@ exports.handler = async function (event) {
         if (!list.some(e => e.discordId === entry.discordId)) {
             list.push(entry);
             await store.set('allowlist', list);
+            clearAdminCache();
             const adminId = session.robloxUsername || session.discordId;
             await addAdminAudit(store, adminId, 'ALLOWLIST_ADD', { discordId: entry.discordId, label: entry.label, roleIds: entry.roleIds });
             await sendAuditWebhook(adminId, 'ALLOWLIST_ADD', { discordId: entry.discordId, label: entry.label, roleIds: entry.roleIds });
@@ -138,7 +144,10 @@ exports.handler = async function (event) {
                 if (invalidIds.length) return json(400, { error: 'Unknown role IDs: ' + invalidIds.join(', ') });
                 if (!actorPerms.superadmin) {
                     for (const roleId of roleIds) {
-                        const role     = existingRoles.find(r => r.id === roleId);
+                        const role = existingRoles.find(r => r.id === roleId);
+                        if (role && role.superadminOnly) {
+                            return json(403, { error: 'Role "' + role.name + '" can only be assigned by a superadmin' });
+                        }
                         const badPerms = role && role.permissions
                             ? ALL_PERMS.filter(k => role.permissions[k] && !actorPerms[k])
                             : [];
@@ -169,6 +178,7 @@ exports.handler = async function (event) {
         }
 
         await store.set('allowlist', list);
+        clearAdminCache();
         const adminId = session.robloxUsername || session.discordId;
         await addAdminAudit(store, adminId, 'ALLOWLIST_UPDATE', auditDetails);
         await sendAuditWebhook(adminId, 'ALLOWLIST_UPDATE', auditDetails);
@@ -193,6 +203,7 @@ exports.handler = async function (event) {
 
         list = list.filter(e => e.discordId !== discordId);
         await store.set('allowlist', list);
+        clearAdminCache();
         const adminId = session.robloxUsername || session.discordId;
         await addAdminAudit(store, adminId, 'ALLOWLIST_REMOVE', { discordId, label: target ? target.label : discordId });
         await sendAuditWebhook(adminId, 'ALLOWLIST_REMOVE', { discordId, label: target ? target.label : discordId });

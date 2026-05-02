@@ -44,14 +44,54 @@ function verifySession(cookieHeader) {
 }
 
 // ── Session freshness ───────────────────────────────────────────
-// Rank-based superadmin (divisionRank >= 246) is only trusted for 24 h after login.
-// After that the user must re-authenticate. Allowlist-based access is not time-limited
-// because membership is stored server-side and can be revoked at any time.
-const _RANK_SESSION_MAX_AGE_S = 24 * 60 * 60; // 24 hours in seconds
+// Rank-based superadmin trust window matches the session TTL (7 days).
+// Allowlist-based access is not time-limited because membership is stored
+// server-side and can be revoked at any time.
+const _RANK_SESSION_MAX_AGE_S = 7 * 24 * 60 * 60; // 7 days — matches SESSION_TTL in auth-callback.js
 function _isRankSessionFresh(session) {
     // Sessions created before the iat field was added are treated as stale.
     if (!session || typeof session.iat !== 'number') return false;
     return (Math.floor(Date.now() / 1000) - session.iat) < _RANK_SESSION_MAX_AGE_S;
+}
+
+// Accepts any valid session including applicantMode:true sessions.
+// Use this for endpoints that don't require group membership (apply endpoints).
+function verifyAnySession(cookieHeader) {
+    return verifySession(cookieHeader); // verifySession already validates sig+expiry, not rank
+}
+
+// ── Admin data in-memory cache ──────────────────────────────────
+// allowlist + roles are fetched together once per Lambda warm window
+// (TTL 2 min). Callers that write to these must call clearAdminCache()
+// so the next read gets fresh data.
+let _adminCache   = null;
+let _adminCacheTs = 0;
+const _ADMIN_CACHE_TTL = 120_000; // 2 minutes
+
+async function _getAdminData(adminStore) {
+    if (_adminCache && Date.now() - _adminCacheTs < _ADMIN_CACHE_TTL) {
+        return _adminCache;
+    }
+    // Fetch allowlist, roles, and Discord role grants in parallel
+    const [list, roles, grants] = await Promise.all([
+        adminStore.get('allowlist',            { type: 'json' }).catch(() => []),
+        adminStore.get('roles',                { type: 'json' }).catch(() => []),
+        adminStore.get('discord-role-grants',  { type: 'json' }).catch(() => [])
+    ]);
+    _adminCache   = {
+        list:   Array.isArray(list)   ? list   : [],
+        roles:  Array.isArray(roles)  ? roles  : [],
+        grants: Array.isArray(grants) ? grants : []
+    };
+    _adminCacheTs = Date.now();
+    return _adminCache;
+}
+
+// Call this after any write to allowlist or roles so the next request
+// sees fresh data rather than stale cache.
+function clearAdminCache() {
+    _adminCache   = null;
+    _adminCacheTs = 0;
 }
 
 // ── Admin gate ──────────────────────────────────────────────────
@@ -59,11 +99,10 @@ function _isRankSessionFresh(session) {
 // Returns a JSON error response if access is denied.
 async function requireAdmin(session) {
     if (!session) return json(401, { error: 'Unauthorized' });
-    // Rank-based gate: only valid for 24 h after login to prevent stale-rank bypass.
     if (session.divisionRank >= 246 && _isRankSessionFresh(session)) return null;
     try {
-        const allowlist = await fireStore('commandos-admin').get('allowlist', { type: 'json' }) || [];
-        if (allowlist.some(e => e.discordId === session.discordId)) return null;
+        const { list } = await _getAdminData(fireStore('commandos-admin'));
+        if (list.some(e => e.discordId === session.discordId)) return null;
     } catch {}
     return json(403, { error: 'Forbidden' });
 }
@@ -72,7 +111,7 @@ async function requireAdmin(session) {
 // Returns full permissions object for the session user.
 // Superadmin (rank 246+) always has all perms.
 // Supports both single roleId and roleIds[] array for multi-role assignment.
-const ALL_PERMS = ['roleAssign','roleEdit','disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit','mfOfficers','mfRemote'];
+const ALL_PERMS = ['roleAssign','roleEdit','disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit','mfOfficers','mfRemote','eventsStats','contentAdmin'];
 
 async function getUserAdminPerms(session, adminStore) {
     if (!session) return null;
@@ -82,35 +121,35 @@ async function getUserAdminPerms(session, adminStore) {
         ALL_PERMS.forEach(k => { perms[k] = true; });
         return perms;
     }
-    console.log('[admin-debug] rank check failed — rank:', session.divisionRank, 'fresh:', _isRankSessionFresh(session), '— falling back to allowlist');
     try {
-        const list  = await adminStore.get('allowlist', { type: 'json' }) || [];
-        console.log('[admin-debug] allowlist read returned', Array.isArray(list) ? list.length + ' entries' : typeof list);
+        const { list, roles, grants } = await _getAdminData(adminStore);
         const entry = list.find(e => e.discordId === session.discordId);
-        console.log('[admin-debug] discordId lookup:', session.discordId, '— found:', !!entry);
-        if (!entry) return null;
 
-        // Collect all roleIds — support legacy single roleId and new roleIds array
-        const roleIds = [];
-        if (Array.isArray(entry.roleIds) && entry.roleIds.length) {
-            roleIds.push(...entry.roleIds);
-        } else if (entry.roleId) {
-            roleIds.push(entry.roleId);
+        // Discord role IDs the user currently holds in the guild (stored in session at login)
+        const userDiscordRoles = new Set(Array.isArray(session.discordRoles) ? session.discordRoles : []);
+
+        // Check if any Discord role grants apply to this user
+        const applicableGrants = (grants || []).filter(g => userDiscordRoles.has(g.discordRoleId));
+
+        // No allowlist entry AND no applicable role grants → no access
+        if (!entry && !applicableGrants.length) return null;
+
+        // Build merged permissions from: direct entry perms + entry role templates + Discord role grants
+        let merged = Object.assign({}, (entry && entry.permissions) || {});
+
+        // Role templates assigned directly to this user
+        const directRoleIds = entry
+            ? (Array.isArray(entry.roleIds) && entry.roleIds.length ? entry.roleIds : (entry.roleId ? [entry.roleId] : []))
+            : [];
+        for (const roleId of directRoleIds) {
+            const role = roles.find(r => r.id === roleId);
+            if (role && role.permissions) ALL_PERMS.forEach(k => { if (role.permissions[k]) merged[k] = true; });
         }
 
-        // Union permissions from all assigned roles + any direct permissions
-        const roles = roleIds.length
-            ? (await adminStore.get('roles', { type: 'json' }).catch(() => []) || [])
-            : [];
-
-        let merged = Object.assign({}, entry.permissions || {});
-        for (const roleId of roleIds) {
-            const role = roles.find(r => r.id === roleId);
-            if (role && role.permissions) {
-                ALL_PERMS.forEach(k => {
-                    if (role.permissions[k]) merged[k] = true;
-                });
-            }
+        // Role templates mapped to the user's Discord roles
+        for (const grant of applicableGrants) {
+            const role = roles.find(r => r.id === grant.roleId);
+            if (role && role.permissions) ALL_PERMS.forEach(k => { if (role.permissions[k]) merged[k] = true; });
         }
 
         const perms = { superadmin: false };
@@ -189,6 +228,24 @@ async function addErrorLog(_unused, action, error, details) {
     await store.set('error-log', log);
 }
 
+// ── Standard footer appended to all embeds ─────────────────────
+// Set SYNTAX_AVATAR_URL env var to the developer's Discord avatar URL.
+const SYNTAX_FOOTER = {
+    text: 'Mainframe System developed by Syntax',
+    icon_url: process.env.SYNTAX_AVATAR_URL || undefined
+};
+
+function addSyntaxFooter(payload) {
+    if (!payload || !Array.isArray(payload.embeds)) return payload;
+    payload.embeds = payload.embeds.map(embed => {
+        if (!embed.footer) embed.footer = { ...SYNTAX_FOOTER };
+        else if (!embed.footer.text) embed.footer.text = SYNTAX_FOOTER.text;
+        if (SYNTAX_FOOTER.icon_url && !embed.footer.icon_url) embed.footer.icon_url = SYNTAX_FOOTER.icon_url;
+        return embed;
+    });
+    return payload;
+}
+
 // ── Discord webhook sender ──────────────────────────────────────
 // Fire-and-forget — never throws, never blocks response.
 async function sendDiscordWebhook(url, payload) {
@@ -196,7 +253,7 @@ async function sendDiscordWebhook(url, payload) {
         await fetch(url, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(payload)
+            body:    JSON.stringify(addSyntaxFooter(payload))
         });
     } catch (_) { /* never block on webhook failure */ }
 }
@@ -261,7 +318,7 @@ async function sendAuditWebhook(adminId, action, details) {
             { name: 'Admin', value: String(adminId || 'Unknown'), inline: true },
             ...fieldsArr
         ],
-        footer: { text: 'TNI:C Commandos Mainframe' }
+        footer: { text: 'TNI:C Commandos Mainframe · Mainframe System developed by Syntax' }
     };
     return sendDiscordWebhook(DISCORD_AUDIT_WEBHOOK, { embeds: [embed] });
 }
@@ -270,9 +327,11 @@ module.exports = {
     blobsStore,
     fireStore,
     verifySession,
+    verifyAnySession,
     requireAdmin,
     getUserAdminPerms,
     requirePerm,
+    clearAdminCache,
     ALL_PERMS,
     json,
     getCurrentWeekNumber,
@@ -280,5 +339,6 @@ module.exports = {
     addAdminAudit,
     addErrorLog,
     sendErrorWebhook,
-    sendAuditWebhook
+    sendAuditWebhook,
+    sendDiscordWebhook
 };

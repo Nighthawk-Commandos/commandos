@@ -69,6 +69,21 @@ async function getRobloxIdViaRowifi(discordId, guildId, apiKey) {
 }
 
 // ── Roblox helpers ───────────────────────────────────────────
+// Fetch the user's Discord role IDs in the guild — used for role-based permission grants.
+// Reuses ROWIFI_API_KEY (the Discord bot token) since it's already required.
+async function getDiscordGuildRoles(userId, guildId, botToken) {
+    if (!botToken || !guildId) return [];
+    try {
+        const res = await fetch(
+            `https://discord.com/api/guilds/${guildId}/members/${userId}`,
+            { headers: { Authorization: 'Bot ' + botToken } }
+        );
+        if (!res.ok) return [];
+        const member = await res.json();
+        return Array.isArray(member.roles) ? member.roles : [];
+    } catch { return []; }
+}
+
 async function getRobloxUsername(userId) {
     try {
         const res  = await fetch(`https://users.roblox.com/v1/users/${userId}`);
@@ -110,6 +125,13 @@ exports.handler = async function (event) {
         console.error('[auth-callback] FATAL: SESSION_SECRET env var is not set');
         return redirectError('auth_failed');
     }
+
+    // Detect applicant mode (set by auth-apply.js) — skips the group membership check
+    const modeMatch   = (event.headers.cookie || '').match(/(?:^|;\s*)cmd_oauth_mode=([^;]+)/);
+    const isApplyMode = modeMatch && decodeURIComponent(modeMatch[1]) === 'apply';
+    const clearModeCookie = isLocalDev
+        ? 'cmd_oauth_mode=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+        : 'cmd_oauth_mode=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
 
     const params = new URLSearchParams(event.queryStringParameters || {});
     const code   = params.get('code');
@@ -159,17 +181,20 @@ exports.handler = async function (event) {
 
         if (!robloxId) return redirectError('rowifi_not_linked');
 
-        // 4. Roblox username + group ranks (parallel)
-        const [robloxUsername, ranks] = await Promise.all([
+        // 4. Roblox username, group ranks, and Discord guild roles (parallel)
+        const [robloxUsername, ranks, discordRoles] = await Promise.all([
             getRobloxUsername(robloxId),
-            getGroupRanks(robloxId)
+            getGroupRanks(robloxId),
+            getDiscordGuildRoles(discordUser.id, guildId, rowifiKey)
         ]);
 
-        // 5. Must be in division group
-        if (ranks.divisionRank === 0) return redirectError('not_in_group');
+        // 5. Must be in division group — unless this is an applicant-mode login
+        if (ranks.divisionRank === 0 && !isApplyMode) return redirectError('not_in_group');
 
         // 6. Build session payload
         const nowSec = Math.floor(Date.now() / 1000);
+        // Applicant sessions get a shorter TTL (24 h) and the applicantMode flag
+        const ttl     = isApplyMode ? 24 * 60 * 60 : SESSION_TTL;
         const session = {
             discordId:        discordUser.id,
             discordUsername:  discordUser.username,
@@ -180,22 +205,34 @@ exports.handler = async function (event) {
             divisionRoleName: ranks.divisionRoleName,
             ghostRank:        ranks.ghostRank,
             ghostRoleName:    ranks.ghostRoleName,
-            iat:              nowSec,               // issued-at — used for freshness checks
-            exp:              nowSec + SESSION_TTL
+            discordRoles:     discordRoles,  // Discord role IDs in the guild — used for role-based perm grants
+            applicantMode:    isApplyMode && ranks.divisionRank === 0,
+            iat:              nowSec,
+            exp:              nowSec + ttl
         };
 
         const token       = signSession(session, secret);
         const cookieFlags = isLocalDev
-            ? `HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`
-            : `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`;
+            ? `HttpOnly; SameSite=Lax; Path=/; Max-Age=${ttl}`
+            : `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${ttl}`;
+
+        // Read the return-to link stored by auth-login.js, validated again for safety.
+        const returnMatch = (event.headers.cookie || '').match(/(?:^|;\s*)cmd_oauth_return=([^;]+)/);
+        const rawReturn   = returnMatch ? decodeURIComponent(returnMatch[1]) : '';
+        const safeReturn  = /^[a-zA-Z0-9_-]{1,60}$/.test(rawReturn) ? rawReturn : '';
+        const clearReturnCookie = isLocalDev
+            ? 'cmd_oauth_return=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+            : 'cmd_oauth_return=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
 
         return {
             statusCode: 302,
             multiValueHeaders: {
-                Location:   ['/'],
+                Location:   [safeReturn ? '/?link=' + encodeURIComponent(safeReturn) : '/'],
                 'Set-Cookie': [
                     `${SESSION_COOKIE}=${token}; ${cookieFlags}`,
-                    clearStateCookie
+                    clearStateCookie,
+                    clearReturnCookie,
+                    clearModeCookie
                 ]
             },
             body: ''

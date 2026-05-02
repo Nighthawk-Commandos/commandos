@@ -48,12 +48,12 @@ export function renderDISSection() {
                 hs.classList.remove('hidden');
                 hs.className = 'obj-mode';
                 hs.innerHTML = '<div class="bg-grid"></div>' +
-                    '<aside class="obj-sidebar">' +
+                    '<aside class="obj-sidebar" data-accent="purple">' +
                     '  <div class="obj-sidebar-logo">' +
                     '    <div class="obj-sidebar-label">Nighthawk Commandos</div>' +
                     '    <div class="obj-sidebar-title">Deployment<br>Incentive</div>' +
                     '  </div>' +
-                    '  <div class="obj-sidebar-back"><button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Hub</button></div>' +
+                    '  <div class="obj-sidebar-back"><button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Back to Hub</button></div>' +
                     '</aside>' +
                     '<main class="obj-main">' +
                     '  <div class="obj-error">Failed to load: ' + esc(e.message) + '</div>' +
@@ -151,18 +151,20 @@ function _disPaint() {
     hs.className = 'obj-mode';
     hs.innerHTML =
         '<div class="bg-grid"></div>' +
-        '<aside class="obj-sidebar" id="dis-sidebar">' +
+        '<aside class="obj-sidebar" id="dis-sidebar" data-accent="purple">' +
         '  <div class="obj-sidebar-logo">' +
-        '    <div class="obj-sidebar-label">Nighthawk Commandos \u2014 Week ' + wk + '</div>' +
+        '    <div class="obj-sidebar-label">Nighthawk Commandos</div>' +
         '    <div class="obj-sidebar-title">Deployment<br>Incentive</div>' +
-        '  </div>' +
-        '  <div class="obj-sidebar-back">' +
-        '    <button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Hub</button>' +
+        '    <div class="dis-week-badge">Week ' + wk + '</div>' +
         '  </div>' +
         '  <nav class="obj-nav" id="dis-nav">' +
         '    <div class="obj-nav-group">Views</div>' +
         navHtml +
         '  </nav>' +
+        '  <div class="obj-sidebar-back">' +
+        '    <button class="obj-hub-btn" data-click="showHomeScreen">\u2190 Back to Hub</button>' +
+        (window._sysVersion ? '<div class="sidebar-version">' + window._sysVersion + '</div>' : '') +
+        '  </div>' +
         '</aside>' +
         '<main class="obj-main" id="dis-main">' +
         '  <div id="dis-body">' +
@@ -246,8 +248,8 @@ function _disSmartUpdateBoard() {
         }
     });
 
-    var label = document.querySelector('#dis-sidebar .obj-sidebar-label');
-    if (label && st.weekNumber) label.textContent = 'Nighthawk Commandos \u2014 Week ' + st.weekNumber;
+    var badge = document.querySelector('#dis-sidebar .dis-week-badge');
+    if (badge && st.weekNumber) badge.textContent = 'Week ' + st.weekNumber;
 }
 
 // ── Board view ────────────────────────────────────────────────
@@ -535,27 +537,53 @@ function _disAdminPoints(body) {
     var html =
         '<div class="info-block" style="margin-bottom:16px">' +
         '<h3>Points Management</h3>' +
-        '<p class="admin-desc">Manually adjust points or raffle entries. Use positive values to add, negative to subtract.</p></div>';
+        '<p class="admin-desc">Adjust or clear points. Select multiple officers with checkboxes for bulk operations.</p></div>';
 
-    html += '<div class="dis-inline-form" style="margin-bottom:24px">' +
+    // Single-user adjust row + reset-all
+    html += '<div class="dis-inline-form" style="margin-bottom:12px">' +
         '<input id="dis-pts-user" class="admin-input" placeholder="Roblox username" style="flex:1">' +
         '<input id="dis-pts-amt" class="admin-input" type="number" placeholder="Points delta" style="width:130px">' +
-        '<button class="btn-dis-primary" data-click="disAdjustPoints">Adjust Points</button>' +
+        '<button class="btn-dis-primary" data-click="disAdjustPoints">Adjust</button>' +
+        '<button class="btn-dis-danger" data-click="disResetAllPoints" title="Set all officers\' points to zero">Reset All Points</button>' +
         '</div>';
 
     if (lb.length > 0) {
         html += '<div class="tbl-wrap"><table>' +
-            '<thead><tr><th>Officer</th><th style="text-align:right">Points</th><th style="text-align:right">Tiles</th><th style="text-align:right">Entries</th></tr></thead><tbody>';
+            '<thead><tr>' +
+            '<th style="width:32px"><input type="checkbox" id="dis-pts-select-all" title="Select all"></th>' +
+            '<th>Officer</th>' +
+            '<th style="text-align:right">Points</th>' +
+            '<th style="text-align:right">Tiles</th>' +
+            '<th style="text-align:right">Entries</th>' +
+            '<th style="width:60px"></th>' +
+            '</tr></thead><tbody>';
         lb.forEach(function (e) {
-            html += '<tr><td>' + esc(e.username) + '</td>' +
+            html += '<tr>' +
+                '<td><input type="checkbox" class="dis-pts-check" data-user="' + esc(e.username) + '"></td>' +
+                '<td>' + esc(e.username) + '</td>' +
                 '<td style="text-align:right;color:var(--accent2)">' + e.points + '</td>' +
                 '<td style="text-align:right;color:var(--muted)">' + e.tiles + '</td>' +
-                '<td style="text-align:right;color:var(--muted)">' + e.raffleEntries + '</td></tr>';
+                '<td style="text-align:right;color:var(--muted)">' + e.raffleEntries + '</td>' +
+                '<td style="text-align:right"><button class="btn-dis-sm-danger" data-click="disResetUserPoints" data-user="' + esc(e.username) + '" title="Clear points for ' + esc(e.username) + '">Clear</button></td>' +
+                '</tr>';
         });
         html += '</tbody></table></div>';
+
+        // Bulk section
+        html += '<div class="dis-inline-form" style="margin-top:14px">' +
+            '<span style="font-size:12px;color:var(--muted);white-space:nowrap">Bulk give selected:</span>' +
+            '<input id="dis-pts-bulk-amt" class="admin-input" type="number" placeholder="Points delta" style="width:130px">' +
+            '<button class="btn-dis-primary" data-click="disBulkAdjustPoints">Apply to Selected</button>' +
+            '</div>';
     }
 
     body.innerHTML = html;
+
+    // Wire select-all checkbox after render
+    var sa = document.getElementById('dis-pts-select-all');
+    if (sa) sa.addEventListener('change', function () {
+        document.querySelectorAll('.dis-pts-check').forEach(function (cb) { cb.checked = sa.checked; });
+    });
 }
 
 // ── Admin: Raffle tab ──────────────────────────────────────────
@@ -569,30 +597,57 @@ function _disAdminRaffle(body) {
         '<p class="admin-desc">Adjust raffle entries manually, or run the weighted raffle. ' +
         'Total entries: <strong style="color:var(--accent2)">' + total + '</strong>.</p></div>';
 
-    html += '<div class="dis-inline-form" style="margin-bottom:24px">' +
+    // Single-user adjust row + reset-all
+    html += '<div class="dis-inline-form" style="margin-bottom:12px">' +
         '<input id="dis-rfl-user" class="admin-input" placeholder="Roblox username" style="flex:1">' +
         '<input id="dis-rfl-amt" class="admin-input" type="number" placeholder="Entries delta" style="width:130px">' +
-        '<button class="btn-dis-primary" data-click="disAdjustRaffle">Adjust Entries</button>' +
+        '<button class="btn-dis-primary" data-click="disAdjustRaffle">Adjust</button>' +
+        '<button class="btn-dis-danger" data-click="disResetAllRaffle" title="Set all officers\' raffle entries to zero">Reset All Entries</button>' +
         '</div>';
 
-    html += '<div style="margin-bottom:24px">' +
+    // Run raffle button
+    html += '<div style="margin-bottom:20px">' +
         '<button class="btn-dis-primary" style="font-size:13px;padding:12px 28px" id="dis-raffle-run-btn" data-click="disRunRaffle">Run Weighted Raffle</button>' +
         '</div>' +
         '<div id="dis-raffle-result"></div>';
 
     if (lb.length > 0) {
+        var withEntries = lb.filter(function (e) { return (e.raffleEntries || 0) > 0; });
         html += '<div class="tbl-wrap"><table>' +
-            '<thead><tr><th>Officer</th><th style="text-align:right">Entries</th><th style="text-align:right">Chance</th></tr></thead><tbody>';
-        lb.filter(function (e) { return (e.raffleEntries || 0) > 0; }).forEach(function (e) {
+            '<thead><tr>' +
+            '<th style="width:32px"><input type="checkbox" id="dis-rfl-select-all" title="Select all"></th>' +
+            '<th>Officer</th>' +
+            '<th style="text-align:right">Entries</th>' +
+            '<th style="text-align:right">Chance</th>' +
+            '<th style="width:60px"></th>' +
+            '</tr></thead><tbody>';
+        withEntries.forEach(function (e) {
             var pct = total > 0 ? ((e.raffleEntries / total) * 100).toFixed(1) : '0.0';
-            html += '<tr><td>' + esc(e.username) + '</td>' +
+            html += '<tr>' +
+                '<td><input type="checkbox" class="dis-rfl-check" data-user="' + esc(e.username) + '"></td>' +
+                '<td>' + esc(e.username) + '</td>' +
                 '<td style="text-align:right;color:var(--accent2)">' + e.raffleEntries + '</td>' +
-                '<td style="text-align:right;color:var(--muted)">' + pct + '%</td></tr>';
+                '<td style="text-align:right;color:var(--muted)">' + pct + '%</td>' +
+                '<td style="text-align:right"><button class="btn-dis-sm-danger" data-click="disResetUserRaffle" data-user="' + esc(e.username) + '" title="Clear entries for ' + esc(e.username) + '">Clear</button></td>' +
+                '</tr>';
         });
         html += '</tbody></table></div>';
+
+        // Bulk section
+        html += '<div class="dis-inline-form" style="margin-top:14px">' +
+            '<span style="font-size:12px;color:var(--muted);white-space:nowrap">Bulk give selected:</span>' +
+            '<input id="dis-rfl-bulk-amt" class="admin-input" type="number" placeholder="Entries delta" style="width:130px">' +
+            '<button class="btn-dis-primary" data-click="disBulkAdjustRaffle">Apply to Selected</button>' +
+            '</div>';
     }
 
     body.innerHTML = html;
+
+    // Wire select-all checkbox after render
+    var sa = document.getElementById('dis-rfl-select-all');
+    if (sa) sa.addEventListener('change', function () {
+        document.querySelectorAll('.dis-rfl-check').forEach(function (cb) { cb.checked = sa.checked; });
+    });
 }
 
 // ── Admin: Game Pool tab ───────────────────────────────────────
@@ -841,6 +896,52 @@ export function disAdjustRaffle() {
     if (!user || !amt || !user.value.trim() || !amt.value) { toast('Enter username and amount', 'error'); return; }
     _disAdminAction({ action: 'adjust-raffle', username: user.value.trim(), delta: parseInt(amt.value, 10) }, 'Raffle entries updated');
     user.value = ''; amt.value = '';
+}
+
+export function disResetUserPoints(username) {
+    if (!username || !confirm('Clear all points for ' + username + '?')) return;
+    _disAdminAction({ action: 'reset-user-points', username: username }, username + '\'s points cleared');
+}
+
+export function disResetUserRaffle(username) {
+    if (!username || !confirm('Clear all raffle entries for ' + username + '?')) return;
+    _disAdminAction({ action: 'reset-user-raffle', username: username }, username + '\'s raffle entries cleared');
+}
+
+export function disResetAllPoints() {
+    if (!confirm('Reset ALL officers\' points to zero? This cannot be undone.')) return;
+    _disAdminAction({ action: 'reset-all-points' }, 'All points reset to zero');
+}
+
+export function disResetAllRaffle() {
+    if (!confirm('Reset ALL officers\' raffle entries to zero? This cannot be undone.')) return;
+    _disAdminAction({ action: 'reset-all-raffle' }, 'All raffle entries reset to zero');
+}
+
+export function disBulkAdjustPoints() {
+    var checks = document.querySelectorAll('.dis-pts-check:checked');
+    var amt    = document.getElementById('dis-pts-bulk-amt');
+    if (!checks.length)         { toast('No officers selected', 'error'); return; }
+    if (!amt || !amt.value)     { toast('Enter a points delta', 'error'); return; }
+    var delta = parseFloat(amt.value);
+    if (isNaN(delta))           { toast('Invalid delta', 'error'); return; }
+    var usernames = Array.from(checks).map(function (cb) { return cb.dataset.user; });
+    _disAdminAction({ action: 'bulk-adjust-points', usernames: usernames, delta: delta },
+        'Points adjusted for ' + usernames.length + ' officer' + (usernames.length !== 1 ? 's' : ''));
+    if (amt) amt.value = '';
+}
+
+export function disBulkAdjustRaffle() {
+    var checks = document.querySelectorAll('.dis-rfl-check:checked');
+    var amt    = document.getElementById('dis-rfl-bulk-amt');
+    if (!checks.length)     { toast('No officers selected', 'error'); return; }
+    if (!amt || !amt.value) { toast('Enter an entries delta', 'error'); return; }
+    var delta = parseInt(amt.value, 10);
+    if (isNaN(delta))       { toast('Invalid delta', 'error'); return; }
+    var usernames = Array.from(checks).map(function (cb) { return cb.dataset.user; });
+    _disAdminAction({ action: 'bulk-adjust-raffle', usernames: usernames, delta: delta },
+        'Raffle entries adjusted for ' + usernames.length + ' officer' + (usernames.length !== 1 ? 's' : ''));
+    if (amt) amt.value = '';
 }
 
 export function disSetGlobalMultiplier() {

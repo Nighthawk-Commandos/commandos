@@ -87,17 +87,27 @@ export var API = (function () {
             return fetch('/api/version', { credentials: 'same-origin', cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
-                    if (!data || !data.v) return;
+                    if (!data || !data.v) return data;
                     try {
                         var stored = localStorage.getItem('c:deployVer');
                         if (stored !== null && stored !== data.v) {
-                            _mem = {};
-                            localStorage.clear();
+                            // New deploy detected. Reload once per tab session to pull the latest bundle.
+                            // sessionStorage flag prevents infinite reload loops.
+                            if (!sessionStorage.getItem('mf:upd')) {
+                                sessionStorage.setItem('mf:upd', '1');
+                                _mem = {};
+                                localStorage.clear();
+                                localStorage.setItem('c:deployVer', data.v);
+                                location.reload();
+                                return data; // execution stops here due to reload
+                            }
                         }
                         localStorage.setItem('c:deployVer', data.v);
+                        sessionStorage.removeItem('mf:upd'); // clear flag after clean load
                     } catch (_) {}
+                    return data;
                 })
-                .catch(function () {});
+                .catch(function () { return null; });
         },
 
         getAllData: function () {

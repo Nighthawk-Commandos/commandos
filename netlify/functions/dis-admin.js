@@ -18,19 +18,25 @@ async function addAudit(store, adminId, action, details) {
 
 // Permission required per action
 const ACTION_PERMS = {
-    'unlock-tile':        'disTiles',
-    'lock-tile':          'disTiles',
-    'force-claim':        'disTiles',
-    'set-tile-points':    'disTiles',
-    'set-tile-eventtype': 'disTiles',
-    'adjust-points':      'disPoints',
-    'adjust-raffle':      'disRaffle',
-    'set-multiplier':     'disSync',
-    'reset-week':         'disSync',
-    'regenerate-board':   'disSync',
-    'advance-week':       'disSync',
-    'advance-month':      'disSync',
-    'get-audit':          'disAudit'
+    'unlock-tile':         'disTiles',
+    'lock-tile':           'disTiles',
+    'force-claim':         'disTiles',
+    'set-tile-points':     'disTiles',
+    'set-tile-eventtype':  'disTiles',
+    'adjust-points':       'disPoints',
+    'adjust-raffle':       'disRaffle',
+    'reset-user-points':   'disPoints',
+    'reset-user-raffle':   'disRaffle',
+    'bulk-adjust-points':  'disPoints',
+    'bulk-adjust-raffle':  'disRaffle',
+    'reset-all-points':    'disSync',
+    'reset-all-raffle':    'disSync',
+    'set-multiplier':      'disSync',
+    'reset-week':          'disSync',
+    'regenerate-board':    'disSync',
+    'advance-week':        'disSync',
+    'advance-month':       'disSync',
+    'get-audit':           'disAudit'
 };
 
 exports.handler = async (event) => {
@@ -39,6 +45,7 @@ exports.handler = async (event) => {
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
     if (!session) return json(401, { error: 'Unauthorized' });
 
+    if ((event.body || '').length > 16384) return json(413, { error: 'Request too large' });
     let body;
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
 
@@ -213,6 +220,118 @@ async function _handleAction(body, store, adminId) {
         await invalidateCache();
         await sendAuditWebhook(adminId, 'ADJUST_RAFFLE', { username, delta, newTotal: users[username].raffleEntries });
         return json(200, { ok: true, newEntries: users[username].raffleEntries });
+    }
+
+    // ── reset-user-points ─────────────────────────────────────────
+    if (body.action === 'reset-user-points') {
+        const username = typeof body.username === 'string' ? body.username.trim() : null;
+        if (!username) return json(400, { error: 'Username required' });
+        if (username.length > 50) return json(400, { error: 'Username too long (max 50 chars)' });
+
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+        if (!users[username]) return json(404, { error: 'User not found' });
+        const prev = users[username].points || 0;
+        users[username].points = 0;
+
+        await store.set('users', users);
+        await addAudit(store, adminId, 'RESET_USER_POINTS', { username, prev });
+        await invalidateCache();
+        await sendAuditWebhook(adminId, 'RESET_USER_POINTS', { username, prev });
+        return json(200, { ok: true });
+    }
+
+    // ── reset-user-raffle ─────────────────────────────────────────
+    if (body.action === 'reset-user-raffle') {
+        const username = typeof body.username === 'string' ? body.username.trim() : null;
+        if (!username) return json(400, { error: 'Username required' });
+        if (username.length > 50) return json(400, { error: 'Username too long (max 50 chars)' });
+
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+        if (!users[username]) return json(404, { error: 'User not found' });
+        const prev = users[username].raffleEntries || 0;
+        users[username].raffleEntries = 0;
+
+        await store.set('users', users);
+        await addAudit(store, adminId, 'RESET_USER_RAFFLE', { username, prev });
+        await invalidateCache();
+        await sendAuditWebhook(adminId, 'RESET_USER_RAFFLE', { username, prev });
+        return json(200, { ok: true });
+    }
+
+    // ── reset-all-points ──────────────────────────────────────────
+    if (body.action === 'reset-all-points') {
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+        let affected = 0;
+        for (const un of Object.keys(users)) {
+            if ((users[un].points || 0) !== 0) { users[un].points = 0; affected++; }
+        }
+        await store.set('users', users);
+        await addAudit(store, adminId, 'RESET_ALL_POINTS', { affected });
+        await invalidateCache();
+        await sendAuditWebhook(adminId, 'RESET_ALL_POINTS', { affected });
+        return json(200, { ok: true, affected });
+    }
+
+    // ── reset-all-raffle ──────────────────────────────────────────
+    if (body.action === 'reset-all-raffle') {
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+        let affected = 0;
+        for (const un of Object.keys(users)) {
+            if ((users[un].raffleEntries || 0) !== 0) { users[un].raffleEntries = 0; affected++; }
+        }
+        await store.set('users', users);
+        await addAudit(store, adminId, 'RESET_ALL_RAFFLE', { affected });
+        await invalidateCache();
+        await sendAuditWebhook(adminId, 'RESET_ALL_RAFFLE', { affected });
+        return json(200, { ok: true, affected });
+    }
+
+    // ── bulk-adjust-points ────────────────────────────────────────
+    if (body.action === 'bulk-adjust-points') {
+        const usernames = Array.isArray(body.usernames) ? body.usernames.map(u => String(u).trim()).filter(Boolean) : [];
+        const delta     = Number(body.delta);
+        if (!usernames.length)                            return json(400, { error: 'At least one username required' });
+        if (usernames.length > 100)                       return json(400, { error: 'Too many usernames (max 100)' });
+        if (isNaN(delta) || !Number.isFinite(delta))      return json(400, { error: 'Delta must be a finite number' });
+        if (Math.abs(delta) > 10000)                      return json(400, { error: 'Delta too large (max ±10000)' });
+
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+        for (const un of usernames) {
+            if (!users[un]) users[un] = { points: 0, raffleEntries: 0, claimedTiles: [], history: [] };
+            users[un].points = Math.max(0, (users[un].points || 0) + delta);
+        }
+        await store.set('users', users);
+        await addAudit(store, adminId, 'BULK_ADJUST_POINTS', { usernames, delta, count: usernames.length });
+        await invalidateCache();
+        await sendAuditWebhook(adminId, 'BULK_ADJUST_POINTS', { count: usernames.length, delta });
+        return json(200, { ok: true, affected: usernames.length });
+    }
+
+    // ── bulk-adjust-raffle ────────────────────────────────────────
+    if (body.action === 'bulk-adjust-raffle') {
+        const usernames = Array.isArray(body.usernames) ? body.usernames.map(u => String(u).trim()).filter(Boolean) : [];
+        const delta     = parseInt(body.delta, 10);
+        if (!usernames.length)       return json(400, { error: 'At least one username required' });
+        if (usernames.length > 100)  return json(400, { error: 'Too many usernames (max 100)' });
+        if (isNaN(delta))            return json(400, { error: 'Delta must be an integer' });
+        if (Math.abs(delta) > 500)   return json(400, { error: 'Delta too large (max ±500)' });
+
+        let users = await store.get('users', { type: 'json' }).catch(() => ({}));
+        users = users || {};
+        for (const un of usernames) {
+            if (!users[un]) users[un] = { points: 0, raffleEntries: 0, claimedTiles: [], history: [] };
+            users[un].raffleEntries = Math.max(0, (users[un].raffleEntries || 0) + delta);
+        }
+        await store.set('users', users);
+        await addAudit(store, adminId, 'BULK_ADJUST_RAFFLE', { usernames, delta, count: usernames.length });
+        await invalidateCache();
+        await sendAuditWebhook(adminId, 'BULK_ADJUST_RAFFLE', { count: usernames.length, delta });
+        return json(200, { ok: true, affected: usernames.length });
     }
 
     // ── set-tile-points ───────────────────────────────────────────

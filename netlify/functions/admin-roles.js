@@ -5,7 +5,7 @@
 //  DELETE → { id }                            → delete
 'use strict';
 
-const { fireStore, verifySession, getUserAdminPerms, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
+const { fireStore, verifySession, getUserAdminPerms, clearAdminCache, ALL_PERMS, json, addAdminAudit, sendAuditWebhook } = require('./_shared');
 
 function makeId(name) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
@@ -36,6 +36,11 @@ exports.handler = async (event) => {
         roles = Array.isArray(raw) ? raw : [];
     } catch { roles = []; }
 
+    // GET ?grants=1 returns the Discord role → admin role grants list
+    if (event.httpMethod === 'GET' && (event.queryStringParameters || {}).grants) {
+        const raw = await adminStore.get('discord-role-grants', { type: 'json' }).catch(() => []);
+        return json(200, Array.isArray(raw) ? raw : []);
+    }
     if (event.httpMethod === 'GET') return json(200, roles);
 
     // All write operations require roleEdit or superadmin
@@ -43,60 +48,105 @@ exports.handler = async (event) => {
         return json(403, { error: 'Requires roleEdit permission' });
     }
 
+    if ((event.body || '').length > 8192) return json(413, { error: 'Request too large' });
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'invalid_body' }); }
 
     const adminId = session.robloxUsername || session.discordId;
 
+    // POST { grant: { discordRoleId, roleId } } — add a Discord role grant
+    if (event.httpMethod === 'POST' && body.grant) {
+        const { discordRoleId, roleId } = body.grant;
+        if (!discordRoleId || !/^\d{17,20}$/.test(String(discordRoleId))) return json(400, { error: 'discordRoleId must be a valid Discord snowflake' });
+        if (!roleId || !roles.some(r => r.id === roleId)) return json(400, { error: 'Unknown roleId' });
+        let grants = await adminStore.get('discord-role-grants', { type: 'json' }).catch(() => []) || [];
+        if (!Array.isArray(grants)) grants = [];
+        if (!grants.some(g => g.discordRoleId === discordRoleId)) {
+            grants.push({ discordRoleId: String(discordRoleId), roleId });
+            await adminStore.set('discord-role-grants', grants);
+            clearAdminCache();
+            await addAdminAudit(adminStore, adminId, 'DISCORD_GRANT_ADD', { discordRoleId, roleId });
+        }
+        return json(200, { success: true, grants });
+    }
+
+    // DELETE { grant: { discordRoleId } } — remove a Discord role grant
+    if (event.httpMethod === 'DELETE' && body.grant) {
+        const { discordRoleId } = body.grant;
+        if (!discordRoleId) return json(400, { error: 'discordRoleId required' });
+        let grants = await adminStore.get('discord-role-grants', { type: 'json' }).catch(() => []) || [];
+        grants = grants.filter(g => g.discordRoleId !== String(discordRoleId));
+        await adminStore.set('discord-role-grants', grants);
+        clearAdminCache();
+        await addAdminAudit(adminStore, adminId, 'DISCORD_GRANT_REMOVE', { discordRoleId });
+        return json(200, { success: true, grants });
+    }
+
     if (event.httpMethod === 'POST') {
-        const { name, color, permissions } = body;
+        const { name, color, permissions, superadminOnly } = body;
         if (!name || !name.trim()) return json(400, { error: 'Name required' });
         if (name.trim().length > 100) return json(400, { error: 'Name max 100 chars' });
-        if (color && (typeof color !== 'string' || color.length > 30 || !/^#[0-9a-fA-F]{3,8}$/.test(color))) {
+        if (color && (typeof color !== 'string' || !/^#[0-9a-fA-F]{3,8}$/.test(color))) {
             return json(400, { error: 'color must be a valid hex color' });
         }
+        // superadminOnly roles can only be created by superadmins
+        if (superadminOnly && !actorPerms.superadmin) {
+            return json(403, { error: 'Only superadmins can create superadmin-only roles' });
+        }
         const newRole = {
-            id:          makeId(name.trim()),
-            name:        name.trim(),
-            color:       color || '#7c4ab8',
-            permissions: sanitizePerms(permissions || {}, actorPerms)
+            id:             makeId(name.trim()),
+            name:           name.trim(),
+            color:          color || '#7c4ab8',
+            permissions:    sanitizePerms(permissions || {}, actorPerms),
+            superadminOnly: !!superadminOnly
         };
         roles.push(newRole);
         await adminStore.set('roles', roles);
-        await addAdminAudit(adminStore, adminId, 'ROLE_CREATE', { id: newRole.id, name: newRole.name, color: newRole.color });
-        await sendAuditWebhook(adminId, 'ROLE_CREATE', { id: newRole.id, name: newRole.name, color: newRole.color });
+        clearAdminCache();
+        await addAdminAudit(adminStore, adminId, 'ROLE_CREATE', { id: newRole.id, name: newRole.name, superadminOnly: newRole.superadminOnly });
+        await sendAuditWebhook(adminId, 'ROLE_CREATE', { id: newRole.id, name: newRole.name, superadminOnly: newRole.superadminOnly });
         return json(200, { success: true, roles });
     }
 
     if (event.httpMethod === 'PATCH') {
-        const { id, name, color, permissions } = body;
-        if (!id) return json(400, { error: 'id required' });
+        const { id, name, color, permissions, superadminOnly } = body;
+        if (!id || typeof id !== 'string') return json(400, { error: 'id required' });
         if (name && name.trim().length > 100) return json(400, { error: 'Name max 100 chars' });
-        if (color && (typeof color !== 'string' || color.length > 30 || !/^#[0-9a-fA-F]{3,8}$/.test(color))) {
+        if (color && (typeof color !== 'string' || !/^#[0-9a-fA-F]{3,8}$/.test(color))) {
             return json(400, { error: 'color must be a valid hex color' });
         }
         const idx = roles.findIndex(r => r.id === id);
         if (idx === -1) return json(404, { error: 'Role not found' });
+        // Changing superadminOnly flag requires superadmin
+        const newSuperadminOnly = superadminOnly !== undefined ? !!superadminOnly : roles[idx].superadminOnly;
+        if (newSuperadminOnly !== roles[idx].superadminOnly && !actorPerms.superadmin) {
+            return json(403, { error: 'Only superadmins can change the superadmin-only flag' });
+        }
         roles[idx] = Object.assign({}, roles[idx], {
-            name:        (name || roles[idx].name).trim(),
-            color:       color || roles[idx].color,
-            permissions: permissions !== undefined
-                ? sanitizePerms(permissions, actorPerms)
-                : roles[idx].permissions
+            name:           (name || roles[idx].name).trim(),
+            color:          color || roles[idx].color,
+            permissions:    permissions !== undefined ? sanitizePerms(permissions, actorPerms) : roles[idx].permissions,
+            superadminOnly: newSuperadminOnly
         });
         await adminStore.set('roles', roles);
-        await addAdminAudit(adminStore, adminId, 'ROLE_UPDATE', { id, name: roles[idx].name, color: roles[idx].color });
-        await sendAuditWebhook(adminId, 'ROLE_UPDATE', { id, name: roles[idx].name, color: roles[idx].color });
+        clearAdminCache();
+        await addAdminAudit(adminStore, adminId, 'ROLE_UPDATE', { id, name: roles[idx].name });
+        await sendAuditWebhook(adminId, 'ROLE_UPDATE', { id, name: roles[idx].name });
         return json(200, { success: true, roles });
     }
 
     if (event.httpMethod === 'DELETE') {
         const { id } = body;
-        if (!id) return json(400, { error: 'id required' });
+        if (!id || typeof id !== 'string') return json(400, { error: 'id required' });
         const target = roles.find(r => r.id === id);
         if (!target) return json(404, { error: 'Role not found' });
+        // Superadmin-only roles can only be deleted by superadmins
+        if (target.superadminOnly && !actorPerms.superadmin) {
+            return json(403, { error: 'Only superadmins can delete superadmin-only roles' });
+        }
         roles = roles.filter(r => r.id !== id);
         await adminStore.set('roles', roles);
+        clearAdminCache();
         await addAdminAudit(adminStore, adminId, 'ROLE_DELETE', { id, name: target.name });
         await sendAuditWebhook(adminId, 'ROLE_DELETE', { id, name: target.name });
         return json(200, { success: true, roles });

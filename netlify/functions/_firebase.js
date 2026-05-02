@@ -52,4 +52,9 @@ function fireStore(collection) {
     };
 }
 
-module.exports = { fireStore };
+// Returns a raw Firestore CollectionReference for advanced queries.
+function firestoreCollection(name) {
+    return _db().collection(name);
+}
+
+module.exports = { fireStore, firestoreCollection };
