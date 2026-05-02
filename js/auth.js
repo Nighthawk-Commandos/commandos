@@ -48,14 +48,22 @@ export var AUTH = {
 
     isLoggedIn: function () { return !!_user; },
     isInDivision: function () {
-        return !!(_user && _user.divisionRank > 0);
+        if (!_user) return false;
+        if (_user.divisionRank > 0) return true;
+        // Users with event-log or bypass perms need MF section access even without rank
+        var p = _adminPerms;
+        return !!(p && (p.viewEventLog || p.editEventLog || p.bypassMember));
     },
     canSubmitOfficerForms: function () {
         if (!_user) return false;
-        return _user.divisionRank >= 235 || _user.ghostRank >= 7;
+        if (_user.divisionRank >= 235 || _user.ghostRank >= 7) return true;
+        var p = _adminPerms;
+        return !!(p && (p.viewEventLog || p.editEventLog));
     },
     canAccessHigherSections: function () {
-        return !!(_user && _user.divisionRank >= 243);
+        if (_user && _user.divisionRank >= 243) return true;
+        var p = _adminPerms;
+        return !!(p && p.viewObjectives);
     },
     canAccessAdmin: function () {
         return AUTH.canAdminAny();
@@ -79,7 +87,16 @@ export var AUTH = {
         var p = _adminPerms;
         return !!(p && (p.roleAssign || p.roleEdit || p.disSync || p.disTiles ||
                         p.disPoints || p.disRaffle || p.disGamePool || p.disAudit ||
+<<<<<<< HEAD
                         p.mfOfficers || p.mfRemote || p.eventsStats || p.contentAdmin));
+=======
+                        p.mfOfficers || p.mfRemote || p.eventsStats || p.contentAdmin ||
+                        p.viewAdmin));
+    },
+    canBypassMemberCheck: function () {
+        var p = _adminPerms;
+        return !!(p && p.bypassMember);
+>>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
     },
     canAdminTab: function (tab) {
         if (_user && _user.divisionRank >= 246) return true;

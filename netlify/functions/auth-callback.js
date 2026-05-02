@@ -7,6 +7,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { fireStore, getUserAdminPerms } = require('./_shared');
 
 const DIVISION_GROUP = 3496996;
 const GHOST_GROUP    = 11000162;
@@ -188,8 +189,23 @@ exports.handler = async function (event) {
             getDiscordGuildRoles(discordUser.id, guildId, rowifiKey)
         ]);
 
+<<<<<<< HEAD
         // 5. Must be in division group — unless this is an applicant-mode login
         if (ranks.divisionRank === 0 && !isApplyMode) return redirectError('not_in_group');
+=======
+        // 5. Must be in division group — unless applicant-mode OR a bypassMember perm is granted
+        if (ranks.divisionRank === 0 && !isApplyMode) {
+            // Check whether any Discord role grant gives this user the bypassMember perm.
+            // Build a minimal session-like object with just the fields getUserAdminPerms needs.
+            let canBypass = false;
+            try {
+                const partialSession = { discordId: discordUser.id, robloxId: String(robloxId), divisionRank: 0, discordRoles };
+                const perms = await getUserAdminPerms(partialSession, fireStore('commandos-admin'));
+                canBypass = !!(perms && perms.bypassMember);
+            } catch (_) { /* never block login on a perm-check failure */ }
+            if (!canBypass) return redirectError('not_in_group');
+        }
+>>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
 
         // 6. Build session payload
         const nowSec = Math.floor(Date.now() / 1000);

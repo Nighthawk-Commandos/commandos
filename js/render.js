@@ -365,6 +365,7 @@ export function docOutsideClick(pairs) {
 var _ADMIN = { tab: null, roles: [], list: [], seq: 0 };
 
 var ADMIN_PERM_DEFS = [
+<<<<<<< HEAD
     { key: 'roleAssign',  label: 'Assign Users', superadminOnly: true  },
     { key: 'roleEdit',    label: 'Edit Roles',   superadminOnly: true  },
     { key: 'mfOfficers',   label: 'Officers',     superadminOnly: false },
@@ -377,12 +378,37 @@ var ADMIN_PERM_DEFS = [
     { key: 'disRaffle',   label: 'Raffle',       superadminOnly: false },
     { key: 'disGamePool', label: 'Game Pool',    superadminOnly: false },
     { key: 'disAudit',    label: 'Audit',        superadminOnly: false }
+=======
+    { key: 'roleAssign',     label: 'Assign Users',        superadminOnly: true  },
+    { key: 'roleEdit',       label: 'Edit Roles',          superadminOnly: true  },
+    { key: 'mfOfficers',     label: 'Officers',            superadminOnly: false },
+    { key: 'mfRemote',       label: 'Remote',              superadminOnly: false },
+    { key: 'eventsStats',    label: 'Event Stats',         superadminOnly: false },
+    { key: 'contentAdmin',   label: 'Content',             superadminOnly: false },
+    { key: 'disSync',        label: 'Sync',                superadminOnly: false },
+    { key: 'disTiles',       label: 'Tiles',               superadminOnly: false },
+    { key: 'disPoints',      label: 'Points',              superadminOnly: false },
+    { key: 'disRaffle',      label: 'Raffle',              superadminOnly: false },
+    { key: 'disGamePool',    label: 'Game Pool',           superadminOnly: false },
+    { key: 'disAudit',       label: 'Audit',               superadminOnly: false },
+    // Section-access perms — assignable via role templates + Discord role grants
+    { key: 'viewAdmin',      label: 'Admin Dashboard',     superadminOnly: false },
+    { key: 'viewObjectives', label: 'Objectives View',     superadminOnly: false },
+    { key: 'viewEventLog',   label: 'Submit Event Log',    superadminOnly: false },
+    { key: 'editEventLog',   label: 'Edit Event Log',      superadminOnly: false },
+    { key: 'bypassMember',   label: 'Bypass Member Check', superadminOnly: false }
+>>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
 ];
 
 var ADMIN_PERM_GROUPS = [
     { label: 'System',    keys: ['roleAssign', 'roleEdit'] },
     { label: 'Mainframe', keys: ['mfOfficers', 'mfRemote', 'eventsStats', 'contentAdmin'] },
+<<<<<<< HEAD
     { label: 'DIS',       keys: ['disSync', 'disTiles', 'disPoints', 'disRaffle', 'disGamePool', 'disAudit'] }
+=======
+    { label: 'DIS',       keys: ['disSync', 'disTiles', 'disPoints', 'disRaffle', 'disGamePool', 'disAudit'] },
+    { label: 'Access',    keys: ['viewAdmin', 'viewObjectives', 'viewEventLog', 'editEventLog', 'bypassMember'] }
+>>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
 ];
 
 export function renderUnifiedAdmin() {

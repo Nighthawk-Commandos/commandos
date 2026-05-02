@@ -925,11 +925,32 @@ Promise.all([
     window._sysVersion = _sysVersion;
     document.getElementById('loading').classList.add('hidden');
 
+<<<<<<< HEAD
     if (!user || !AUTH.isInDivision()) {
         // Public mode — unauthenticated or applicant-only session
         document.getElementById('home-screen').classList.remove('hidden');
         renderPublicScreen();
         if (_quickLink) _handleQuickLink();
+=======
+    if (!user) {
+        // Unauthenticated — show public screen immediately
+        document.getElementById('home-screen').classList.remove('hidden');
+        renderPublicScreen();
+        if (_quickLink) _handleQuickLink();
+    } else if (!AUTH.isInDivision()) {
+        // Logged in but not a division member — check for bypassMember perm before
+        // deciding whether to show the full home screen or the public screen.
+        AUTH.loadAdminPerms().then(function () {
+            document.getElementById('home-screen').classList.remove('hidden');
+            if (AUTH.canBypassMemberCheck()) {
+                if (_quickLink) { renderHomeScreen(); _handleQuickLink(); }
+                else { renderHomeScreen(); }
+            } else {
+                renderPublicScreen();
+                if (_quickLink) _handleQuickLink();
+            }
+        });
+>>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
     } else {
         AUTH.loadAdminPerms().then(function () {
             document.getElementById('home-screen').classList.remove('hidden');
