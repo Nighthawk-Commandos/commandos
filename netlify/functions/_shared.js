@@ -111,9 +111,6 @@ async function requireAdmin(session) {
 // Returns full permissions object for the session user.
 // Superadmin (rank 246+) always has all perms.
 // Supports both single roleId and roleIds[] array for multi-role assignment.
-<<<<<<< HEAD
-const ALL_PERMS = ['roleAssign','roleEdit','disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit','mfOfficers','mfRemote','eventsStats','contentAdmin'];
-=======
 const ALL_PERMS = [
     'roleAssign','roleEdit',
     'disSync','disTiles','disPoints','disRaffle','disGamePool','disAudit',
@@ -125,7 +122,6 @@ const ALL_PERMS = [
     'editEventLog',   // access Edit Event Log form
     'bypassMember'    // allow login and mainframe access without division membership
 ];
->>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
 
 async function getUserAdminPerms(session, adminStore) {
     if (!session) return null;

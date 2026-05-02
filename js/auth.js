@@ -87,16 +87,12 @@ export var AUTH = {
         var p = _adminPerms;
         return !!(p && (p.roleAssign || p.roleEdit || p.disSync || p.disTiles ||
                         p.disPoints || p.disRaffle || p.disGamePool || p.disAudit ||
-<<<<<<< HEAD
-                        p.mfOfficers || p.mfRemote || p.eventsStats || p.contentAdmin));
-=======
                         p.mfOfficers || p.mfRemote || p.eventsStats || p.contentAdmin ||
                         p.viewAdmin));
     },
     canBypassMemberCheck: function () {
         var p = _adminPerms;
         return !!(p && p.bypassMember);
->>>>>>> 6ecfc2b (For to add access permissions so I can give certain people access to certain things)
     },
     canAdminTab: function (tab) {
         if (_user && _user.divisionRank >= 246) return true;
