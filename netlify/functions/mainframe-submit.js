@@ -1,10 +1,11 @@
 // POST /api/mainframe/submit
 // Auth-gated proxy for Apps Script mutation calls.
-// Verifies the session cookie before forwarding to Apps Script.
-// The client never sees SCRIPT_URL — it is only held server-side.
+// Routes through api.cipherinteractive.dev which uses a 25-second GAS
+// timeout (vs. the previous 7-second limit) and keeps GAS warm via
+// background refresh so mutations typically complete in 1-3 seconds.
 'use strict';
 
-const { verifySession, json } = require('./_shared');
+const { verifySession, json, cipherApiPost } = require('./_shared');
 
 const ALLOWED_FNS = [
     'submitEventLog',
@@ -20,9 +21,6 @@ exports.handler = async (event) => {
     const session = verifySession(event.headers.cookie || event.headers.Cookie);
     if (!session) return json(401, { error: 'Unauthorized' });
 
-    const scriptUrl = process.env.SCRIPT_URL;
-    if (!scriptUrl) return json(500, { error: 'SCRIPT_URL not configured' });
-
     if ((event.body || '').length > 16384) return json(413, { error: 'Request too large' });
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'Invalid JSON' }); }
@@ -32,18 +30,8 @@ exports.handler = async (event) => {
         return json(400, { error: 'Unknown function' });
     }
 
-    let url = scriptUrl + '?action=api&fn=' + encodeURIComponent(fn);
-    if (payload && typeof payload === 'object' && Object.keys(payload).length) {
-        url += '&payload=' + encodeURIComponent(JSON.stringify(payload));
-    }
-
     try {
-        const res = await fetch(url, {
-            headers: { 'Cache-Control': 'no-store' },
-            signal: AbortSignal.timeout(7000)
-        });
-        if (!res.ok) throw new Error('Apps Script HTTP ' + res.status);
-        const data = await res.json();
+        const data = await cipherApiPost('/api/mainframe/submit', { fn, payload });
         return json(200, data);
     } catch (err) {
         return json(502, { error: 'Submit failed: ' + err.message });

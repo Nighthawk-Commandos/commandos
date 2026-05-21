@@ -44,6 +44,11 @@ to     = "/.netlify/functions/admin-roles"
 status = 200
 
 [[redirects]]
+from   = "/api/admin/rank-settings"
+to     = "/.netlify/functions/admin-rank-settings"
+status = 200
+
+[[redirects]]
 from   = "/api/admin/perms"
 to     = "/.netlify/functions/admin-perms"
 status = 200

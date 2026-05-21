@@ -406,9 +406,10 @@ export function renderUnifiedAdmin() {
         { key: 'gamepool',  label: 'Game Pool', canSee: AUTH.canAdminTab('gamepool')  },
         { key: 'audit',     label: 'Audit Log', canSee: AUTH.canAdminTab('audit')     },
         { key: 'errors',    label: 'Errors',    canSee: AUTH.canAdminTab('errors')    },
-        { key: 'documents', label: 'Documents', canSee: AUTH.canAdminTab('content')   },
+        { key: 'documents', label: 'Documents',    canSee: AUTH.canAdminTab('content')  },
         { key: 'appdefs',   label: 'Applications', canSee: AUTH.canAdminTab('content') },
-        { key: 'permgroups',label: 'Perm Groups',  canSee: AUTH.canAdminTab('content') }
+        { key: 'permgroups',label: 'Perm Groups',  canSee: AUTH.canAdminTab('content') },
+        { key: 'settings',  label: 'Settings',     canSee: AUTH.canAdminTab('settings') }
     ].filter(function (t) { return t.canSee; });
 
     if (!_ADMIN.tab || !tabDefs.some(function (t) { return t.key === _ADMIN.tab; })) {
@@ -476,6 +477,7 @@ function _adminRenderTab() {
     if (tab === 'documents') { _adminRenderContent('docs',   body, isCurrent); return; }
     if (tab === 'appdefs')   { _adminRenderContent('apps',   body, isCurrent); return; }
     if (tab === 'permgroups'){ _adminRenderContent('perm-groups', body, isCurrent); return; }
+    if (tab === 'settings')  { _adminRenderSettings(body, isCurrent);       return; }
     adminRenderDisTab(tab, body, isCurrent);
 }
 
@@ -552,6 +554,105 @@ function _initOfficerAC() {
 
 export function pickAdminOfficerAdd(name) { sv('admin-mf-add-inp', name); closeAC('admin-mf-add-dd'); }
 export function pickAdminOfficerRm(name)  { sv('admin-mf-rm-inp',  name); closeAC('admin-mf-rm-dd');  }
+
+// ── Settings tab ──────────────────────────────────────────────
+function _adminRenderSettings(body, isCurrent) {
+    fetch('/api/admin/rank-settings', { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (settings) {
+            if (!isCurrent()) return;
+            body.innerHTML = _buildSettingsUI(settings);
+        })
+        .catch(function (e) {
+            if (!isCurrent()) return;
+            body.innerHTML = '<div class="obj-error">Failed to load: ' + esc(e.message) + '</div>';
+        });
+}
+
+function _buildSettingsUI(settings) {
+    var s = settings || {};
+    var html = '<div class="info-block" style="margin-bottom:16px">' +
+        '<h3>Rank &amp; Role Settings</h3>' +
+        '<p class="admin-desc">Configure which Roblox ranks and Discord roles automatically receive permission levels. These stack on top of individual role assignments.</p>' +
+        '</div>';
+
+    // ── Rank ID inputs ────────────────────────────────────────
+    html += '<div class="info-block" style="margin-bottom:16px"><h3>Rank Thresholds</h3>' +
+        '<p class="admin-desc" style="margin-bottom:12px">Users at or above these Roblox rank IDs automatically receive the corresponding permission set.</p>' +
+        '<div class="admin-role-form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">' +
+        '<div><label class="cf-label" style="display:block;margin-bottom:4px">Officer Rank ID</label>' +
+        '<input id="rs-officer-rank" class="admin-input" type="number" min="1" max="255" style="width:120px" value="' + esc(String(s.officerRankId || '')) + '" placeholder="e.g. 230"></div>' +
+        '<div><label class="cf-label" style="display:block;margin-bottom:4px">High Command Rank ID</label>' +
+        '<input id="rs-hc-rank" class="admin-input" type="number" min="1" max="255" style="width:120px" value="' + esc(String(s.highCommandRankId || '')) + '" placeholder="e.g. 240"></div>' +
+        '<div><label class="cf-label" style="display:block;margin-bottom:4px">Superadmin Discord Role ID</label>' +
+        '<input id="rs-sa-discord" class="admin-input" style="width:200px" value="' + esc(s.superadminDiscordRoleId || '') + '" placeholder="Discord Snowflake (17–20 digits)"></div>' +
+        '</div></div>';
+
+    // ── Officer Perms ─────────────────────────────────────────
+    html += '<div class="info-block" style="margin-bottom:16px"><h3>Officer Permissions</h3>' +
+        '<p class="admin-desc" style="margin-bottom:10px">Permissions automatically granted to users at or above the Officer rank threshold.</p>' +
+        _adminRenderPermToggles(s.officerPerms || {}, 'rs-officer') +
+        '</div>';
+
+    // ── High Command Perms ────────────────────────────────────
+    html += '<div class="info-block" style="margin-bottom:16px"><h3>High Command Permissions</h3>' +
+        '<p class="admin-desc" style="margin-bottom:10px">Permissions automatically granted to users at or above the High Command rank threshold.</p>' +
+        _adminRenderPermToggles(s.highCommandPerms || {}, 'rs-hc') +
+        '</div>';
+
+    html += '<div style="display:flex;gap:8px">' +
+        '<button class="btn-dis-primary" data-click="adminSaveRankSettings">Save Settings</button>' +
+        '</div>';
+
+    return html;
+}
+
+export function adminSaveRankSettings() {
+    var officerRankId  = parseInt((document.getElementById('rs-officer-rank')  || {}).value || '0', 10) || null;
+    var hcRankId       = parseInt((document.getElementById('rs-hc-rank')        || {}).value || '0', 10) || null;
+    var saDiscordRoleId = ((document.getElementById('rs-sa-discord') || {}).value || '').trim() || null;
+
+    if (saDiscordRoleId && !/^\d{17,20}$/.test(saDiscordRoleId)) {
+        toast('Superadmin Discord Role ID must be 17–20 digits', 'error'); return;
+    }
+
+    var allToggleContainers = document.querySelectorAll('.info-block');
+    var officerBlock = null, hcBlock = null;
+    allToggleContainers.forEach(function (block) {
+        var h = block.querySelector('h3');
+        if (h && h.textContent.includes('Officer Permissions')) officerBlock = block;
+        if (h && h.textContent.includes('High Command Permissions')) hcBlock = block;
+    });
+
+    var officerPermsOut = {};
+    if (officerBlock) {
+        officerBlock.querySelectorAll('.admin-perm-toggle').forEach(function (btn) {
+            officerPermsOut[btn.dataset.perm] = btn.classList.contains('on');
+        });
+    }
+    var hcPermsOut = {};
+    if (hcBlock) {
+        hcBlock.querySelectorAll('.admin-perm-toggle').forEach(function (btn) {
+            hcPermsOut[btn.dataset.perm] = btn.classList.contains('on');
+        });
+    }
+
+    fetch('/api/admin/rank-settings', {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            officerRankId:           officerRankId,
+            highCommandRankId:       hcRankId,
+            superadminDiscordRoleId: saDiscordRoleId,
+            officerPerms:            officerPermsOut,
+            highCommandPerms:        hcPermsOut
+        })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) toast('Settings saved', 'success');
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
 
 // ── Roles tab ─────────────────────────────────────────────────
 export function adminPermToggle(btn) {
@@ -952,29 +1053,56 @@ export function adminLoadDiscordGrants() {
         .then(function (grants) {
             var html = '';
             if (Array.isArray(grants) && grants.length) {
-                html += '<div class="content-items-table" style="margin-bottom:12px"><table class="discord-grants-table"><thead><tr><th>Discord Role ID</th><th>Admin Role Template</th><th style="width:80px;text-align:right">Action</th></tr></thead><tbody>';
+                html += '<div class="content-items-table" style="margin-bottom:12px"><table class="discord-grants-table"><thead><tr><th>Discord Role ID</th><th>Admin Role Templates</th><th style="width:120px;text-align:right">Actions</th></tr></thead><tbody>';
                 grants.forEach(function (g) {
-                    var role = roles.find(function (r) { return r.id === g.roleId; });
-                    html += '<tr>' +
+                    var safeRid = ea(g.discordRoleId);
+                    var grantRoleIds = Array.isArray(g.roleIds) && g.roleIds.length ? g.roleIds : (g.roleId ? [g.roleId] : []);
+                    var rolePills = grantRoleIds.map(function (rid) {
+                        var role = roles.find(function (r) { return r.id === rid; });
+                        return role ? '<span class="admin-perm-pill" style="border-left:2px solid ' + esc(role.color || '#7c4ab8') + '">' + esc(role.name) + '</span>' : '';
+                    }).filter(Boolean).join('');
+                    var editChecks = roles.map(function (r) {
+                        var checked = grantRoleIds.indexOf(r.id) !== -1 ? ' checked' : '';
+                        return '<label class="admin-role-check">' +
+                            '<input type="checkbox" class="discord-grant-edit-check" value="' + esc(r.id) + '"' + checked + '> ' +
+                            '<span style="color:' + esc(r.color || '#7c4ab8') + '">' + esc(r.name) + '</span>' +
+                            '</label>';
+                    }).join('');
+                    html += '<tr id="dg-row-' + safeRid + '">' +
                         '<td><span class="discord-role-id-badge">' + esc(g.discordRoleId) + '</span></td>' +
-                        '<td>' + (role ? '<span style="color:' + esc(role.color || '#7c4ab8') + '">' + esc(role.name) + '</span>' : '<span style="color:var(--muted)">Unknown role</span>') + '</td>' +
-                        '<td style="text-align:right"><button class="admin-role-btn danger" data-click="adminRemoveDiscordGrant" data-rid="' + esc(g.discordRoleId) + '">Remove</button></td>' +
-                        '</tr>';
+                        '<td id="dg-pills-' + safeRid + '">' + (rolePills || '<span style="color:var(--muted)">No roles</span>') + '</td>' +
+                        '<td style="text-align:right;white-space:nowrap">' +
+                        '<button class="admin-role-btn" data-click="adminEditDiscordGrant" data-rid="' + esc(g.discordRoleId) + '">Edit</button>' +
+                        '<button class="admin-role-btn danger" data-click="adminRemoveDiscordGrant" data-rid="' + esc(g.discordRoleId) + '">Remove</button>' +
+                        '</td></tr>' +
+                        '<tr id="dg-edit-' + safeRid + '" style="display:none"><td colspan="3">' +
+                        '<div style="padding:8px 0">' +
+                        '<div style="font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">Role Templates for ' + esc(g.discordRoleId) + '</div>' +
+                        '<div class="admin-role-checks" id="dg-checks-' + safeRid + '">' + (editChecks || '<span style="font-size:11px;color:var(--muted)">No roles defined</span>') + '</div>' +
+                        '<div style="display:flex;gap:8px;margin-top:8px">' +
+                        '<button class="btn-dis-primary" style="font-size:12px" data-click="adminSaveDiscordGrantEdit" data-rid="' + esc(g.discordRoleId) + '">Save</button>' +
+                        '<button class="admin-role-btn" data-click="adminCancelDiscordGrantEdit" data-rid="' + esc(g.discordRoleId) + '">Cancel</button>' +
+                        '</div></div></td></tr>';
                 });
                 html += '</tbody></table></div>';
             } else {
                 html += '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">No grants configured.</div>';
             }
 
-            var roleOptions = roles.map(function (r) {
-                return '<option value="' + esc(r.id) + '" style="color:' + esc(r.color || '#7c4ab8') + '">' + esc(r.name) + '</option>';
+            var roleChecks = roles.map(function (r) {
+                return '<label class="admin-role-check">' +
+                    '<input type="checkbox" class="discord-grant-role-check" value="' + esc(r.id) + '"> ' +
+                    '<span style="color:' + esc(r.color || '#7c4ab8') + '">' + esc(r.name) + '</span>' +
+                    '</label>';
             }).join('');
 
-            html += '<div class="admin-role-form-row" style="flex-wrap:wrap;gap:8px">' +
-                '<input id="discord-grant-role-id" class="admin-input" placeholder="Discord Role ID (17–20 digits)" style="width:200px">' +
-                '<select id="discord-grant-tmpl" class="admin-input" style="flex:1">' +
-                '<option value="">Select admin role template…</option>' + roleOptions + '</select>' +
-                '<button class="btn-dis-primary" data-click="adminAddDiscordGrant" style="white-space:nowrap">Add Grant</button>' +
+            html += '<div>' +
+                '<div class="admin-role-form-row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">' +
+                '<input id="discord-grant-role-id" class="admin-input" placeholder="Discord Role ID (17–20 digits)" style="width:220px">' +
+                '<button class="btn-dis-primary" data-click="adminAddDiscordGrant" style="white-space:nowrap">Save Grant</button>' +
+                '</div>' +
+                '<div style="font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">Role Templates</div>' +
+                '<div class="admin-role-checks" id="discord-grant-role-checks">' + (roleChecks || '<span style="font-size:11px;color:var(--muted)">No roles defined</span>') + '</div>' +
                 '</div>';
 
             area.innerHTML = html;
@@ -984,16 +1112,17 @@ export function adminLoadDiscordGrants() {
 
 export function adminAddDiscordGrant() {
     var discordRoleId = ((document.getElementById('discord-grant-role-id') || {}).value || '').trim();
-    var roleId        = (document.getElementById('discord-grant-tmpl') || {}).value || '';
     if (!/^\d{17,20}$/.test(discordRoleId)) { toast('Enter a valid Discord Role ID (17–20 digits)', 'error'); return; }
-    if (!roleId) { toast('Select a role template', 'error'); return; }
+    var roleIds = [];
+    document.querySelectorAll('#discord-grant-role-checks .discord-grant-role-check:checked').forEach(function (cb) { roleIds.push(cb.value); });
+    if (!roleIds.length) { toast('Select at least one role template', 'error'); return; }
     fetch('/api/admin/roles', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grant: { discordRoleId, roleId } })
+        body: JSON.stringify({ grant: { discordRoleId, roleIds } })
     }).then(function (r) { return r.json(); })
         .then(function (res) {
-            if (res.success) { toast('Grant added', 'success'); adminLoadDiscordGrants(); }
+            if (res.success) { toast('Grant saved', 'success'); adminLoadDiscordGrants(); }
             else toast('Error: ' + (res.error || 'Unknown'), 'error');
         }).catch(function () { toast('Request failed', 'error'); });
 }
@@ -1008,6 +1137,42 @@ export function adminRemoveDiscordGrant(el) {
     }).then(function (r) { return r.json(); })
         .then(function (res) {
             if (res.success) { toast('Grant removed', 'success'); adminLoadDiscordGrants(); }
+            else toast('Error: ' + (res.error || 'Unknown'), 'error');
+        }).catch(function () { toast('Request failed', 'error'); });
+}
+
+export function adminEditDiscordGrant(el) {
+    var rid = el && el.dataset ? el.dataset.rid : '';
+    var safeRid = rid.replace(/[^a-z0-9]/gi, '');
+    var editRow = document.getElementById('dg-edit-' + safeRid);
+    if (!editRow) return;
+    var isOpen = editRow.style.display !== 'none';
+    // Close all open edit rows first
+    document.querySelectorAll('[id^="dg-edit-"]').forEach(function (r) { r.style.display = 'none'; });
+    if (!isOpen) editRow.style.display = '';
+}
+
+export function adminCancelDiscordGrantEdit(el) {
+    var rid = el && el.dataset ? el.dataset.rid : '';
+    var safeRid = rid.replace(/[^a-z0-9]/gi, '');
+    var editRow = document.getElementById('dg-edit-' + safeRid);
+    if (editRow) editRow.style.display = 'none';
+}
+
+export function adminSaveDiscordGrantEdit(el) {
+    var rid = el && el.dataset ? el.dataset.rid : '';
+    var safeRid = rid.replace(/[^a-z0-9]/gi, '');
+    var container = document.getElementById('dg-checks-' + safeRid);
+    var roleIds = [];
+    if (container) container.querySelectorAll('.discord-grant-edit-check:checked').forEach(function (cb) { roleIds.push(cb.value); });
+    if (!roleIds.length) { toast('Select at least one role template', 'error'); return; }
+    fetch('/api/admin/roles', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant: { discordRoleId: rid, roleIds: roleIds } })
+    }).then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) { toast('Grant updated', 'success'); adminLoadDiscordGrants(); }
             else toast('Error: ' + (res.error || 'Unknown'), 'error');
         }).catch(function () { toast('Request failed', 'error'); });
 }
@@ -1284,20 +1449,13 @@ export function adminContentSave() {
     } else if (type === 'perm-groups') {
         body.name    = ((document.getElementById('cf-name')    || {}).value || '').trim();
         body.purpose = (document.getElementById('cf-purpose')  || {}).value || 'general';
-        // roleId: empty string means clear it (null), otherwise pass the selected role id
-        var pgRoleVal = (document.getElementById('cf-pg-role') || {}).value || '';
-        body.roleId = pgRoleVal || null;
-        if (isEdit) {
-            var addStr = ((document.getElementById('cf-addids') || {}).value || '');
-            body.addIds = addStr.split(/[\s,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-            var addRoleStr = ((document.getElementById('cf-addRoleIds') || {}).value || '').trim();
-            if (addRoleStr) body.addRoleIds = [addRoleStr];
-        } else {
-            var addStr2 = ((document.getElementById('cf-addids') || {}).value || '');
-            body.addIds = addStr2.split(/[\s,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
-            var addRoleStr2 = ((document.getElementById('cf-addRoleIds') || {}).value || '').trim();
-            if (addRoleStr2) body.addRoleIds = [addRoleStr2];
-        }
+        var pgRoleIds = [];
+        document.querySelectorAll('#cf-pg-roles input[type=checkbox]:checked').forEach(function (cb) { pgRoleIds.push(cb.value); });
+        body.roleIds = pgRoleIds;
+        var addStr = ((document.getElementById('cf-addids') || {}).value || '');
+        body.addIds = addStr.split(/[\s,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+        var addRoleStr = ((document.getElementById('cf-addRoleIds') || {}).value || '');
+        body.addRoleIds = addRoleStr.split(/[\s,]+/).map(function (s) { return s.trim(); }).filter(function (s) { return /^\d{17,20}$/.test(s); });
         if (!body.name) { toast('Name required', 'error'); return; }
     }
 
@@ -1723,24 +1881,39 @@ function _buildContentForm(type, item) {
             }).join('') +
             '</select></div></div>';
 
-        // Role assignment — grants all permissions from the chosen role template to group members
-        html += '<div class="cf-field"><label class="cf-label">Assigned Role' +
-            '<span class="cf-optional"> — group members inherit all permissions from this role</span></label>' +
-            '<select id="cf-pg-role" class="admin-input">' +
-            '<option value="">— No role —</option>' +
-            availableRoles.map(function (r) {
-                var sel = item && item.roleId === r.id ? ' selected' : '';
-                return '<option value="' + esc(r.id) + '"' + sel + '>' + esc(r.name) + '</option>';
-            }).join('') +
-            '</select></div>';
+        // Role assignment — grants all permissions from selected role templates to group members
+        var selectedRoleIds = item
+            ? (Array.isArray(item.roleIds) && item.roleIds.length ? item.roleIds : (item.roleId ? [item.roleId] : []))
+            : [];
+        html += '<div class="cf-field"><label class="cf-label">Assigned Roles' +
+            '<span class="cf-optional"> — group members inherit permissions from all selected roles</span></label>';
+        if (availableRoles.length) {
+            html += '<div class="admin-role-checks" id="cf-pg-roles">' +
+                availableRoles.map(function (r) {
+                    var checked = selectedRoleIds.indexOf(r.id) !== -1 ? ' checked' : '';
+                    return '<label class="admin-role-check">' +
+                        '<input type="checkbox" value="' + esc(r.id) + '"' + checked + '> ' +
+                        '<span style="color:' + esc(r.color || '#7c4ab8') + '">' + esc(r.name) + '</span>' +
+                        '</label>';
+                }).join('') + '</div>';
+        } else {
+            html += '<div style="font-size:11px;color:var(--muted)">No roles defined</div>';
+        }
+        html += '</div>';
 
-        if (isEdit && members.length) {
-            html += '<div class="cf-field"><label class="cf-label">Current Members</label>' +
-                '<div class="pg-member-list">' + members.map(function (did) {
+        if (isEdit) {
+            html += '<div class="cf-field"><label class="cf-label">Current Members' +
+                '<span class="cf-optional"> — Discord user IDs currently in this group</span></label>';
+            if (members.length) {
+                html += '<div class="pg-member-list">' + members.map(function (did) {
                     return '<div class="pg-member-row"><code class="pg-member-id">' + esc(did) + '</code>' +
                         '<button class="admin-role-btn danger" style="padding:2px 8px;font-size:10px" ' +
                         'data-click="adminPGRemoveMember" data-mid="' + esc(did) + '" data-gid="' + esc(item.id) + '">Remove</button></div>';
-                }).join('') + '</div></div>';
+                }).join('') + '</div>';
+            } else {
+                html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">No members yet.</div>';
+            }
+            html += '</div>';
         }
 
         html += '<div class="cf-field"><label class="cf-label">' +
@@ -1749,16 +1922,21 @@ function _buildContentForm(type, item) {
             '<textarea id="cf-addids" class="admin-input" rows="3" placeholder="123456789012345678&#10;987654321098765432"></textarea></div>';
 
         var existingRoleIds = item ? (item.discordRoleIds || []) : [];
-        html += '<div class="cf-field"><label class="cf-label">Discord Role IDs <span class="cf-optional">(anyone with these roles gets group access)</span></label>';
-        if (isEdit && existingRoleIds.length) {
-            html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">' +
-                existingRoleIds.map(function (rid) {
-                    return '<span class="discord-role-id-badge">' + esc(rid) +
-                        '<button type="button" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 2px;font-size:10px;margin-left:4px" ' +
-                        'data-click="adminContentRemovePGRole" data-rid="' + esc(rid) + '" data-gid="' + esc(item ? item.id : '') + '">×</button></span>';
-                }).join('') + '</div>';
+        html += '<div class="cf-field"><label class="cf-label">Discord Role IDs' +
+            '<span class="cf-optional"> — anyone with these roles gets group access</span></label>';
+        if (isEdit) {
+            if (existingRoleIds.length) {
+                html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">' +
+                    existingRoleIds.map(function (rid) {
+                        return '<span class="discord-role-id-badge">' + esc(rid) +
+                            '<button type="button" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 2px;font-size:10px;margin-left:4px" ' +
+                            'data-click="adminContentRemovePGRole" data-rid="' + esc(rid) + '" data-gid="' + esc(item ? item.id : '') + '">×</button></span>';
+                    }).join('') + '</div>';
+            } else {
+                html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">No Discord role IDs linked yet.</div>';
+            }
         }
-        html += '<input id="cf-addRoleIds" class="admin-input" placeholder="Discord Role ID"></div>';
+        html += '<textarea id="cf-addRoleIds" class="admin-input" rows="2" placeholder="123456789012345678&#10;987654321098765432 (one per line or comma-separated)"></textarea></div>';
     }
 
     html += '<div class="cf-actions">' +

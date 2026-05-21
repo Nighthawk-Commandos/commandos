@@ -68,19 +68,25 @@ exports.handler = async (event) => {
 
     const adminId = session.robloxUsername || session.discordId;
 
-    // POST { grant: { discordRoleId, roleId } } — add a Discord role grant
+    // POST { grant: { discordRoleId, roleIds } } — add/update a Discord role grant
     if (event.httpMethod === 'POST' && body.grant) {
-        const { discordRoleId, roleId } = body.grant;
+        const { discordRoleId, roleId, roleIds: rawRoleIds } = body.grant;
         if (!discordRoleId || !/^\d{17,20}$/.test(String(discordRoleId))) return json(400, { error: 'discordRoleId must be a valid Discord snowflake' });
-        if (!roleId || !roles.some(r => r.id === roleId)) return json(400, { error: 'Unknown roleId' });
+        const roleIds = Array.isArray(rawRoleIds) ? rawRoleIds : (roleId ? [roleId] : []);
+        if (!roleIds.length) return json(400, { error: 'At least one role required' });
+        const badId = roleIds.find(rid => !roles.some(r => r.id === rid));
+        if (badId) return json(400, { error: 'Unknown roleId: ' + badId });
         let grants = await adminStore.get('discord-role-grants', { type: 'json' }).catch(() => []) || [];
         if (!Array.isArray(grants)) grants = [];
-        if (!grants.some(g => g.discordRoleId === discordRoleId)) {
-            grants.push({ discordRoleId: String(discordRoleId), roleId });
-            await adminStore.set('discord-role-grants', grants);
-            clearAdminCache();
-            await addAdminAudit(adminStore, adminId, 'DISCORD_GRANT_ADD', { discordRoleId, roleId });
+        const existingIdx = grants.findIndex(g => g.discordRoleId === String(discordRoleId));
+        if (existingIdx !== -1) {
+            grants[existingIdx] = { discordRoleId: String(discordRoleId), roleIds };
+        } else {
+            grants.push({ discordRoleId: String(discordRoleId), roleIds });
         }
+        await adminStore.set('discord-role-grants', grants);
+        clearAdminCache();
+        await addAdminAudit(adminStore, adminId, 'DISCORD_GRANT_ADD', { discordRoleId, roleIds });
         return json(200, { success: true, grants });
     }
 

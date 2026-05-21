@@ -1,11 +1,37 @@
 // ═══════════════════════════════════════════════════════════════
 //  profile.js — User Profile section
-//  Shows identity info not visible on the home screen, permissions,
-//  and the deployment version (sourced from window._sysVersion).
 // ═══════════════════════════════════════════════════════════════
 
 import { esc } from './utils.js';
 import { AUTH } from './auth.js';
+
+// Full permission label map (matches ADMIN_PERM_DEFS in render.js)
+var ALL_PERM_LABELS = {
+    roleAssign:    'Assign Users',
+    roleEdit:      'Edit Roles',
+    mfOfficers:    'Officers',
+    mfRemote:      'Remote Access',
+    eventsStats:   'Event Stats',
+    contentAdmin:  'Content Admin',
+    disSync:       'DIS Sync',
+    disTiles:      'DIS Tiles',
+    disPoints:     'DIS Points',
+    disRaffle:     'DIS Raffle',
+    disGamePool:   'Game Pool',
+    disAudit:      'DIS Audit',
+    viewAdmin:     'Admin Dashboard',
+    viewObjectives:'Objectives View',
+    viewEventLog:  'Submit Event Log',
+    editEventLog:  'Edit Event Log',
+    bypassMember:  'Bypass Member Check'
+};
+
+var SOURCE_LABELS = {
+    direct: 'Direct',
+    grant:  'Role Grant',
+    group:  'Perm Group',
+    rank:   'Rank'
+};
 
 export function renderProfileSection() {
     var u   = AUTH.user || {};
@@ -18,22 +44,10 @@ export function renderProfileSection() {
 
     var ver = window._sysVersion || null;
 
-    var PERM_LABELS = {
-        roleAssign:   'Assign Users',  roleEdit:    'Edit Roles',
-        disSync:      'DIS Sync',      disTiles:    'DIS Tiles',
-        disPoints:    'DIS Points',    disRaffle:   'DIS Raffle',
-        disGamePool:  'Game Pool',     disAudit:    'DIS Audit',
-        mfOfficers:   'Officers',      mfRemote:    'Remote Access',
-        eventsStats:  'Event Stats',   contentAdmin:'Content Admin'
-    };
-
-    var activePerms = Object.keys(PERM_LABELS).filter(function (k) { return ap[k]; });
-    var permPills   = isSA
-        ? '<span class="profile-perm-pill superadmin">Superadmin — All Access</span>'
-        : activePerms.map(function (k) {
-            return '<span class="profile-perm-pill">' + esc(PERM_LABELS[k]) + '</span>';
-        }).join('');
+    var activePerms = Object.keys(ALL_PERM_LABELS).filter(function (k) { return ap[k]; });
     var hasPerms = isSA || activePerms.length > 0;
+
+    var appliedRoles = Array.isArray(ap.appliedRoles) ? ap.appliedRoles : [];
 
     var hs = document.getElementById('home-screen');
     if (!hs) return;
@@ -105,11 +119,9 @@ export function renderProfileSection() {
             : '') +
         '</div>' +
 
-        // Permissions
+        // Mainframe Permissions
         '<div class="profile-section-label">Mainframe Permissions</div>' +
-        (hasPerms
-            ? '<div class="profile-perm-pills">' + permPills + '</div>'
-            : '<p class="profile-no-perms">No special admin permissions assigned.</p>') +
+        _renderPermissions(ap, isSA, activePerms, appliedRoles) +
 
         // Permission Groups
         _renderPermGroups(ap) +
@@ -129,19 +141,42 @@ export function renderProfileSection() {
         '</main>';
 }
 
-function _infoCard(label, value, icon) {
-    return '<div class="profile-info-card">' +
-        '<div class="profile-info-card-label">' + esc(icon) + ' ' + esc(label) + '</div>' +
-        '<div class="profile-info-card-value">' + esc(String(value)) + '</div>' +
-        '</div>';
-}
+function _renderPermissions(ap, isSA, activePerms, appliedRoles) {
+    var html = '';
 
-function _rankCard(group, roleName, rankNum, color) {
-    return '<div class="profile-info-card">' +
-        '<div class="profile-info-card-label" style="color:' + color + '">◈ ' + esc(group) + '</div>' +
-        '<div class="profile-info-card-value" style="color:' + color + '">' + esc(roleName) + '</div>' +
-        (rankNum > 0 ? '<div style="font-size:10px;color:var(--muted);margin-top:3px">Rank ' + rankNum + '</div>' : '') +
-        '</div>';
+    // Applied role template badges
+    if (appliedRoles.length) {
+        html += '<div style="margin-bottom:12px">' +
+            '<div style="font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">Applied Role Templates</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+            appliedRoles.map(function (r) {
+                var sourceLabel = SOURCE_LABELS[r.source] || r.source;
+                return '<span style="font-family:\'DM Mono\',monospace;font-size:10px;padding:3px 8px;border-radius:4px;' +
+                    'background:' + esc(r.color) + '18;color:' + esc(r.color) + ';border:1px solid ' + esc(r.color) + '40;' +
+                    'white-space:nowrap" title="Source: ' + esc(sourceLabel) + '">' +
+                    esc(r.name) +
+                    '<span style="opacity:.55;margin-left:5px;font-size:9px">· ' + esc(sourceLabel) + '</span>' +
+                    '</span>';
+            }).join('') +
+            '</div></div>';
+    }
+
+    // Active permission pills
+    if (isSA) {
+        html += '<div class="profile-perm-pills">' +
+            '<span class="profile-perm-pill superadmin">Superadmin — All Access</span>' +
+            '</div>';
+    } else if (activePerms.length) {
+        html += '<div class="profile-perm-pills">' +
+            activePerms.map(function (k) {
+                return '<span class="profile-perm-pill">' + esc(ALL_PERM_LABELS[k] || k) + '</span>';
+            }).join('') +
+            '</div>';
+    } else if (!appliedRoles.length) {
+        html += '<p class="profile-no-perms">No special admin permissions assigned.</p>';
+    }
+
+    return html;
 }
 
 function _renderPermGroups(ap) {
@@ -159,9 +194,17 @@ function _renderPermGroups(ap) {
         }).join('') + '</div>';
 }
 
-function _idRow(label, value) {
-    return '<div class="profile-id-row">' +
-        '<span class="profile-id-label">' + esc(label) + '</span>' +
-        '<span class="profile-id-value">' + esc(String(value || '—')) + '</span>' +
+function _infoCard(label, value, icon) {
+    return '<div class="profile-info-card">' +
+        '<div class="profile-info-card-label">' + esc(icon) + ' ' + esc(label) + '</div>' +
+        '<div class="profile-info-card-value">' + esc(String(value)) + '</div>' +
+        '</div>';
+}
+
+function _rankCard(group, roleName, rankNum, color) {
+    return '<div class="profile-info-card">' +
+        '<div class="profile-info-card-label" style="color:' + color + '">◈ ' + esc(group) + '</div>' +
+        '<div class="profile-info-card-value" style="color:' + color + '">' + esc(roleName) + '</div>' +
+        (rankNum > 0 ? '<div style="font-size:10px;color:var(--muted);margin-top:3px">Rank ' + rankNum + '</div>' : '') +
         '</div>';
 }

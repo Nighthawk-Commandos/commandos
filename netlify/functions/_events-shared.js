@@ -2,7 +2,7 @@
 // Prefixed with _ so Netlify CLI does not treat this as a function.
 'use strict';
 
-const { fireStore, getUserAdminPerms, json } = require('./_shared');
+const { fireStore, getUserAdminPerms, json, cipherApiGet } = require('./_shared');
 
 // ─── Access gate ──────────────────────────────────────────────────────────────
 
@@ -51,21 +51,13 @@ function getDateRange(period, from, to) {
 
 // ─── Apps Script fetch ────────────────────────────────────────────────────────
 
-// Fetches all events from app_script.js getEventLog(), then filters
-// by [fromMs, toMs] in Node.js.  SCRIPT_URL is kept server-side only.
+// Fetches all events via the custom API (api.cipherinteractive.dev/api/mainframe/events),
+// which caches the getEventLog result in-memory (5-min TTL, stale-while-revalidate)
+// and uses a 25-second GAS timeout — eliminating the cold-start 502s that occurred
+// when calling Apps Script directly from Netlify.
 async function fetchEvents(fromMs, toMs) {
-    const scriptUrl = process.env.SCRIPT_URL;
-    if (!scriptUrl) throw new Error('SCRIPT_URL not configured');
-
-    const res = await fetch(scriptUrl + '?action=api&fn=getEventLog', {
-        headers: { 'Cache-Control': 'no-store' },
-        signal: AbortSignal.timeout(25000)
-    });
-    if (!res.ok) throw new Error('Apps Script HTTP ' + res.status);
-
-    const data = await res.json();
-    if (data && data.error) throw new Error('Apps Script error: ' + data.error);
-    if (!Array.isArray(data)) throw new Error('Expected event array from Apps Script');
+    const data = await cipherApiGet('/api/mainframe/events');
+    if (!Array.isArray(data)) throw new Error('Expected event array from mainframe API');
 
     if (fromMs === 0) return data;
     return data.filter(ev => {

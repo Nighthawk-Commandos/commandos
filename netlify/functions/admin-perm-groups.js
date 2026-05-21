@@ -44,21 +44,22 @@ exports.handler = async (event) => {
 
     // ── CREATE ──────────────────────────────────────────────────
     if (event.httpMethod === 'POST') {
-        const { name, purpose, roleId } = body;
+        const { name, purpose, roleId, roleIds: rawRoleIds } = body;
         if (!name || !name.trim()) return json(400, { error: 'Name required' });
         if (name.trim().length > 80) return json(400, { error: 'Name max 80 chars' });
         const validPurposes = ['docs', 'apps', 'general'];
         const safePurpose = validPurposes.includes(purpose) ? purpose : 'general';
+        const roleIds = Array.isArray(rawRoleIds) ? rawRoleIds.filter(Boolean) : (roleId ? [roleId] : []);
         const group = {
             id: makeId(), name: name.trim(), purpose: safePurpose,
-            roleId: roleId || null,
+            roleIds,
             memberDiscordIds: [], discordRoleIds: [],
             createdAt: Date.now(), createdBy: adminId
         };
         groups.push(group);
         await store.set('perm-groups', groups);
         clearContentPGCache();
-        const auditDetails = { id: group.id, name: group.name, purpose: group.purpose, roleId: group.roleId || 'none' };
+        const auditDetails = { id: group.id, name: group.name, purpose: group.purpose, roleTemplates: roleIds };
         await Promise.all([
             addAdminAudit(adminStore, adminId, 'PERMGROUP_CREATE', auditDetails),
             sendAuditWebhook(adminId, 'PERMGROUP_CREATE', auditDetails)
@@ -68,7 +69,7 @@ exports.handler = async (event) => {
 
     // ── UPDATE ──────────────────────────────────────────────────
     if (event.httpMethod === 'PATCH') {
-        const { id, name, purpose, roleId, addIds, removeIds, addRoleIds, removeRoleIds } = body;
+        const { id, name, purpose, roleId, roleIds: newRoleIds, addIds, removeIds, addRoleIds, removeRoleIds } = body;
         if (!id) return json(400, { error: 'id required' });
         const idx = groups.findIndex(g => g.id === id);
         if (idx === -1) return json(404, { error: 'Group not found' });
@@ -84,11 +85,15 @@ exports.handler = async (event) => {
             changes.push('purpose');
         }
 
-        // roleId: null clears it, a string sets it, undefined leaves it unchanged
-        if (roleId !== undefined) {
-            const prev = groups[idx].roleId || null;
-            groups[idx].roleId = roleId || null;
-            if (prev !== groups[idx].roleId) changes.push('roleId');
+        // roleIds: replace the full list; single roleId for backward compat
+        if (newRoleIds !== undefined) {
+            const prev = JSON.stringify(groups[idx].roleIds || []);
+            groups[idx].roleIds = Array.isArray(newRoleIds) ? newRoleIds.filter(Boolean) : [];
+            if (prev !== JSON.stringify(groups[idx].roleIds)) changes.push('roleIds');
+        } else if (roleId !== undefined) {
+            const prev = JSON.stringify(groups[idx].roleIds || []);
+            groups[idx].roleIds = roleId ? [roleId] : [];
+            if (prev !== JSON.stringify(groups[idx].roleIds)) changes.push('roleIds');
         }
 
         // User Discord IDs
@@ -127,11 +132,11 @@ exports.handler = async (event) => {
         clearContentPGCache();
         const auditDetails = {
             id,
-            name:    groups[idx].name,
-            roleId:  groups[idx].roleId || 'none',
-            members: groups[idx].memberDiscordIds.length,
-            roleIds: (groups[idx].discordRoleIds || []).length,
-            changes: changes.join(', ') || 'none'
+            name:          groups[idx].name,
+            roleTemplates: groups[idx].roleIds || [],
+            members:       groups[idx].memberDiscordIds.length,
+            discordRoleIds: (groups[idx].discordRoleIds || []).length,
+            changes:       changes.join(', ') || 'none'
         };
         await Promise.all([
             addAdminAudit(adminStore, adminId, 'PERMGROUP_UPDATE', auditDetails),
@@ -149,7 +154,7 @@ exports.handler = async (event) => {
         groups = groups.filter(g => g.id !== id);
         await store.set('perm-groups', groups);
         clearContentPGCache();
-        const auditDetails = { id, name: target.name, roleId: target.roleId || 'none' };
+        const auditDetails = { id, name: target.name, roleTemplates: target.roleIds || [] };
         await Promise.all([
             addAdminAudit(adminStore, adminId, 'PERMGROUP_DELETE', auditDetails),
             sendAuditWebhook(adminId, 'PERMGROUP_DELETE', auditDetails)

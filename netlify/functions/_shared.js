@@ -72,16 +72,18 @@ async function _getAdminData(adminStore) {
     if (_adminCache && Date.now() - _adminCacheTs < _ADMIN_CACHE_TTL) {
         return _adminCache;
     }
-    // Fetch allowlist, roles, and Discord role grants in parallel
-    const [list, roles, grants] = await Promise.all([
+    // Fetch allowlist, roles, Discord role grants, and rank settings in parallel
+    const [list, roles, grants, rankSettings] = await Promise.all([
         adminStore.get('allowlist',            { type: 'json' }).catch(() => []),
         adminStore.get('roles',                { type: 'json' }).catch(() => []),
-        adminStore.get('discord-role-grants',  { type: 'json' }).catch(() => [])
+        adminStore.get('discord-role-grants',  { type: 'json' }).catch(() => []),
+        adminStore.get('rank-settings',        { type: 'json' }).catch(() => ({}))
     ]);
     _adminCache   = {
-        list:   Array.isArray(list)   ? list   : [],
-        roles:  Array.isArray(roles)  ? roles  : [],
-        grants: Array.isArray(grants) ? grants : []
+        list:         Array.isArray(list)   ? list   : [],
+        roles:        Array.isArray(roles)  ? roles  : [],
+        grants:       Array.isArray(grants) ? grants : [],
+        rankSettings: (rankSettings && typeof rankSettings === 'object' && !Array.isArray(rankSettings)) ? rankSettings : {}
     };
     _adminCacheTs = Date.now();
     return _adminCache;
@@ -156,7 +158,7 @@ async function getUserAdminPerms(session, adminStore) {
         return perms;
     }
     try {
-        const [{ list, roles, grants }, contentGroups] = await Promise.all([
+        const [{ list, roles, grants, rankSettings }, contentGroups] = await Promise.all([
             _getAdminData(adminStore),
             _getContentPermGroups()
         ]);
@@ -165,20 +167,50 @@ async function getUserAdminPerms(session, adminStore) {
         // Discord role IDs the user currently holds in the guild (stored in session at login)
         const userDiscordRoles = new Set(Array.isArray(session.discordRoles) ? session.discordRoles : []);
 
+        // ── Rank-settings checks ────────────────────────────────────
+        const rs = rankSettings || {};
+
+        // Discord role → superadmin (configured via rank settings)
+        if (rs.superadminDiscordRoleId && userDiscordRoles.has(rs.superadminDiscordRoleId)) {
+            const perms = { superadmin: true };
+            ALL_PERMS.forEach(k => { perms[k] = true; });
+            return perms;
+        }
+
+        // Rank-based officer / high-command permission grants
+        let rankGrantedPerms = null;
+        if (rs.officerRankId && session.divisionRank >= rs.officerRankId && rs.officerPerms) {
+            rankGrantedPerms = rankGrantedPerms || {};
+            ALL_PERMS.forEach(k => { if (rs.officerPerms[k]) rankGrantedPerms[k] = true; });
+        }
+        if (rs.highCommandRankId && session.divisionRank >= rs.highCommandRankId && rs.highCommandPerms) {
+            rankGrantedPerms = rankGrantedPerms || {};
+            ALL_PERMS.forEach(k => { if (rs.highCommandPerms[k]) rankGrantedPerms[k] = true; });
+        }
+
         // Check if any Discord role grants apply to this user
         const applicableGrants = (grants || []).filter(g => userDiscordRoles.has(g.discordRoleId));
 
-        // Check content perm groups that have an assigned role template
-        const pgRoles = contentGroups
-            .filter(g => g.roleId && (
-                (g.memberDiscordIds || []).includes(session.discordId) ||
-                (g.discordRoleIds   || []).some(rid => userDiscordRoles.has(rid))
-            ))
-            .map(g => roles.find(r => r.id === g.roleId))
-            .filter(Boolean);
+        // Check content perm groups that have assigned role templates
+        const pgRoles = [];
+        contentGroups
+            .filter(g => {
+                const hasRoles = (Array.isArray(g.roleIds) && g.roleIds.length) || g.roleId;
+                return hasRoles && (
+                    (g.memberDiscordIds || []).includes(session.discordId) ||
+                    (g.discordRoleIds   || []).some(rid => userDiscordRoles.has(rid))
+                );
+            })
+            .forEach(g => {
+                const ids = Array.isArray(g.roleIds) && g.roleIds.length ? g.roleIds : (g.roleId ? [g.roleId] : []);
+                ids.forEach(id => {
+                    const role = roles.find(r => r.id === id);
+                    if (role) pgRoles.push(role);
+                });
+            });
 
         // No access from any source → no perms
-        if (!entry && !applicableGrants.length && !pgRoles.length) return null;
+        if (!entry && !applicableGrants.length && !pgRoles.length && !rankGrantedPerms) return null;
 
         // Build merged permissions from all sources
         let merged = Object.assign({}, (entry && entry.permissions) || {});
@@ -194,13 +226,21 @@ async function getUserAdminPerms(session, adminStore) {
 
         // Role templates mapped to the user's Discord roles via Discord role grants
         for (const grant of applicableGrants) {
-            const role = roles.find(r => r.id === grant.roleId);
-            if (role && role.permissions) ALL_PERMS.forEach(k => { if (role.permissions[k]) merged[k] = true; });
+            const grantRoleIds = Array.isArray(grant.roleIds) && grant.roleIds.length ? grant.roleIds : (grant.roleId ? [grant.roleId] : []);
+            for (const gid of grantRoleIds) {
+                const role = roles.find(r => r.id === gid);
+                if (role && role.permissions) ALL_PERMS.forEach(k => { if (role.permissions[k]) merged[k] = true; });
+            }
         }
 
         // Role templates granted via permission group membership
         for (const role of pgRoles) {
             ALL_PERMS.forEach(k => { if (role.permissions && role.permissions[k]) merged[k] = true; });
+        }
+
+        // Rank-based officer / high-command perms
+        if (rankGrantedPerms) {
+            ALL_PERMS.forEach(k => { if (rankGrantedPerms[k]) merged[k] = true; });
         }
 
         const perms = { superadmin: false };
@@ -218,6 +258,42 @@ async function requirePerm(session, adminStore, permKey) {
         if (perms && perms[permKey]) return null;
     } catch {}
     return json(403, { error: 'Forbidden: requires ' + permKey + ' permission' });
+}
+
+// ── Cipher Interactive API helpers ──────────────────────────────
+// All Apps Script calls go through api.cipherinteractive.dev which:
+//   • Is a persistent process (no cold starts)
+//   • Maintains in-memory stale-while-revalidate cache
+//   • Keeps GAS warm via background refresh, so mutations are fast
+//   • Uses a 25-second GAS timeout (not bounded by Netlify's 10-s limit)
+// CIPHER_API_URL and CIPHER_API_KEY must be set as Netlify env vars.
+
+function cipherApiGet(path) {
+    const base = process.env.CIPHER_API_URL;
+    const key  = process.env.CIPHER_API_KEY;
+    if (!base || !key) return Promise.reject(new Error('CIPHER_API not configured'));
+    return fetch(base + path, {
+        headers: { 'x-api-key': key },
+        signal:  AbortSignal.timeout(9000),
+    }).then(r => {
+        if (!r.ok) throw new Error('Cipher API HTTP ' + r.status);
+        return r.json();
+    });
+}
+
+function cipherApiPost(path, body) {
+    const base = process.env.CIPHER_API_URL;
+    const key  = process.env.CIPHER_API_KEY;
+    if (!base || !key) return Promise.reject(new Error('CIPHER_API not configured'));
+    return fetch(base + path, {
+        method:  'POST',
+        headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+        signal:  AbortSignal.timeout(9000),
+    }).then(r => {
+        if (!r.ok) throw new Error('Cipher API HTTP ' + r.status);
+        return r.json();
+    });
 }
 
 // ── JSON response helper ────────────────────────────────────────
@@ -386,6 +462,7 @@ module.exports = {
     verifyAnySession,
     requireAdmin,
     getUserAdminPerms,
+    getAdminData: _getAdminData,
     requirePerm,
     clearAdminCache,
     clearContentPGCache,
@@ -397,5 +474,7 @@ module.exports = {
     addErrorLog,
     sendErrorWebhook,
     sendAuditWebhook,
-    sendDiscordWebhook
+    sendDiscordWebhook,
+    cipherApiGet,
+    cipherApiPost
 };

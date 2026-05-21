@@ -111,6 +111,7 @@ export var AUTH = {
         if (tab === 'mainframe') return !!(p.mfOfficers || p.mfRemote);
         if (tab === 'content')   return !!p.contentAdmin;
         if (tab === 'events')    return !!p.eventsStats;
+        if (tab === 'settings')  return !!p.superadmin;
         return !!p[map[tab]];
     },
     logout: function () {
