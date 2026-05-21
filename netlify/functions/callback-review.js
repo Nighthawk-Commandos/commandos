@@ -8,6 +8,8 @@
 // Exemption/Edit/MAP: renders a reviewer form; submission goes to callback-process.
 'use strict';
 
+const { cipherApiGet, cipherApiPost } = require('./_shared');
+
 const PAGE_CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0b0c0f;color:#e8e9ec;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
@@ -81,26 +83,15 @@ const TYPE_CONFIG = {
 };
 
 async function callAppsScript(params) {
-    const scriptUrl = process.env.SCRIPT_URL;
-    if (!scriptUrl) throw new Error('SCRIPT_URL not configured');
-    const qs = new URLSearchParams({
-        action:  'api',
+    return cipherApiPost('/api/mainframe/submit', {
         fn:      'processCallback',
-        payload: JSON.stringify({ ...params, secret: process.env.CALLBACK_SECRET })
+        payload: { ...params, secret: process.env.CALLBACK_SECRET }
     });
-    const res = await fetch(scriptUrl + '?' + qs.toString());
-    if (!res.ok) throw new Error('Apps Script returned HTTP ' + res.status);
-    return res.json();
 }
 
 async function fetchMemberList() {
     try {
-        const scriptUrl = process.env.SCRIPT_URL;
-        if (!scriptUrl) return [];
-        const qs  = new URLSearchParams({ action: 'api', fn: 'getGroupMembers' });
-        const res = await fetch(scriptUrl + '?' + qs.toString());
-        if (!res.ok) return [];
-        const data = await res.json();
+        const data = await cipherApiGet('/api/mainframe/query?fn=getGroupMembers');
         return Array.isArray(data) ? data.sort() : [];
     } catch { return []; }
 }

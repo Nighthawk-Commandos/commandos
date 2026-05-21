@@ -4,29 +4,7 @@
 //  Requires: mfOfficers permission
 'use strict';
 
-const { fireStore, verifySession, getUserAdminPerms, json, addAdminAudit, addErrorLog, sendAuditWebhook, sendErrorWebhook } = require('./_shared');
-
-async function callAppsScript(fn, payload) {
-    const scriptUrl = process.env.SCRIPT_URL;
-    if (!scriptUrl) throw new Error('SCRIPT_URL environment variable not set');
-    const qs = new URLSearchParams({ action: 'api', fn });
-    if (payload && Object.keys(payload).length) {
-        qs.set('payload', JSON.stringify(payload));
-    }
-    const res = await fetch(scriptUrl + '?' + qs.toString(), {
-        method: 'GET',
-        headers: { 'Cache-Control': 'no-store' }
-    });
-    const text = await res.text();
-    if (!res.ok) {
-        throw new Error('Apps Script returned HTTP ' + res.status + ': ' + text.slice(0, 200));
-    }
-    try {
-        return JSON.parse(text);
-    } catch (_) {
-        throw new Error('Apps Script returned non-JSON: ' + text.slice(0, 200));
-    }
-}
+const { fireStore, verifySession, getUserAdminPerms, json, cipherApiPost, addAdminAudit, addErrorLog, sendAuditWebhook, sendErrorWebhook } = require('./_shared');
 
 exports.handler = async (event) => {
     try {
@@ -56,7 +34,7 @@ exports.handler = async (event) => {
 
             let result;
             try {
-                result = await callAppsScript('addOfficer', { username, rank });
+                result = await cipherApiPost('/api/mainframe/submit', { fn: 'addOfficer', payload: { username, rank } });
             } catch (err) {
                 return json(500, { error: 'Apps Script error: ' + err.message });
             }
@@ -77,7 +55,7 @@ exports.handler = async (event) => {
 
             let result;
             try {
-                result = await callAppsScript('removeOfficer', { username });
+                result = await cipherApiPost('/api/mainframe/submit', { fn: 'removeOfficer', payload: { username } });
             } catch (err) {
                 return json(500, { error: 'Apps Script error: ' + err.message });
             }
@@ -97,7 +75,6 @@ exports.handler = async (event) => {
         return json(400, { error: 'Unknown action: ' + body.action });
 
     } catch (err) {
-        // Top-level catch — logs the real error, never hides it
         console.error('[admin-officers] unhandled error:', err);
         sendErrorWebhook('Officer Admin Unhandled Error', err.message || String(err), {}).catch(() => {});
         addErrorLog(null, 'OFFICER_UNHANDLED', err, {}).catch(() => {});

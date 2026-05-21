@@ -5,6 +5,8 @@
 //   type, action, id, token, reviewer, notes
 'use strict';
 
+const { cipherApiPost } = require('./_shared');
+
 const PAGE_CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0b0c0f;color:#e8e9ec;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
@@ -67,23 +69,11 @@ exports.handler = async (event) => {
     if (reviewer.length > 64)  return resultPage(false, 'Reviewer username too long.');
     if (notes.length > 2000)   return resultPage(false, 'Notes too long (max 2000 characters).');
 
-    const scriptUrl = process.env.SCRIPT_URL;
-    if (!scriptUrl) return resultPage(false, 'Server configuration error: SCRIPT_URL not set.');
-
     try {
-        const qs = new URLSearchParams({
-            action:  'api',
+        const result = await cipherApiPost('/api/mainframe/submit', {
             fn:      'processCallback',
-            payload: JSON.stringify({
-                type, action, id, token, reviewer, notes,
-                secret: process.env.CALLBACK_SECRET
-            })
+            payload: { type, action, id, token, reviewer, notes, secret: process.env.CALLBACK_SECRET }
         });
-
-        const res = await fetch(scriptUrl + '?' + qs.toString());
-        if (!res.ok) throw new Error('Apps Script returned HTTP ' + res.status);
-
-        const result = await res.json();
         return resultPage(
             result.success !== false,
             result.message || (result.success ? 'Done.' : 'An unknown error occurred.')
