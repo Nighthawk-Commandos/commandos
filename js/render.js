@@ -28,13 +28,14 @@ export {
 
 // ── Settings ──────────────────────────────────────────────────
 export function renderSettings(D) {
-    var s = D.settings;
+    var s     = D.settings || {};
+    var stats = s.stats    || {};
     var h = pageHeader('Settings', s.quotaWeek ? 'Quota Week of ' + s.quotaWeek : '');
     h += '<div class="stats">';
-    h += statCard(s.stats.totalHosted||0,'Total Events Hosted');
-    h += statCard(s.stats.allTimeRD||0,'All-Time R/D Events');
-    h += statCard(s.stats.allTimeWins||0,'All-Time R/D Wins');
-    h += statCard(fmtPct(s.stats.winRate),'R/D Win Rate');
+    h += statCard(stats.totalHosted||0,'Total Events Hosted');
+    h += statCard(stats.allTimeRD||0,'All-Time R/D Events');
+    h += statCard(stats.allTimeWins||0,'All-Time R/D Wins');
+    h += statCard(fmtPct(stats.winRate),'R/D Win Rate');
     h += statCard(s.weekNumber||'—','Week #');
     h += statCard('Q'+(s.quarter||'?'),'Quarter');
     h += '</div><div class="settings-grid">';
@@ -46,9 +47,9 @@ export function renderSettings(D) {
     h += '</div>';
 
     h += '<div class="info-block"><h3>Performance</h3>';
-    h += kvRow('Top Host', s.stats.topHost||'—');
-    h += kvRow('Peak Performance', s.stats.peakPerf||'—');
-    h += kvRow('All-Time Win Rate', fmtPct(s.stats.winRate));
+    h += kvRow('Top Host', stats.topHost||'—');
+    h += kvRow('Peak Performance', stats.peakPerf||'—');
+    h += kvRow('All-Time Win Rate', fmtPct(stats.winRate));
     h += '</div>';
 
     if (s.contacts && s.contacts.length) {
