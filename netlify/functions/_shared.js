@@ -261,11 +261,11 @@ async function requirePerm(session, adminStore, permKey) {
 }
 
 // ── Cipher Interactive API helpers ──────────────────────────────
-// All Apps Script calls go through api.cipherinteractive.dev which:
+// All Sheets reads/writes go through api.cipherinteractive.dev which:
 //   • Is a persistent process (no cold starts)
 //   • Maintains in-memory stale-while-revalidate cache
-//   • Keeps GAS warm via background refresh, so mutations are fast
-//   • Uses a 25-second GAS timeout (not bounded by Netlify's 10-s limit)
+//   • Reads directly from Google Sheets (no Apps Script round-trip)
+//   • Cache is pre-populated on startup so most reads return in < 100 ms
 // CIPHER_API_URL and CIPHER_API_KEY must be set as Netlify env vars.
 
 function cipherApiGet(path) {

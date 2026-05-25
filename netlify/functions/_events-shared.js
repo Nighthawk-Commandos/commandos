@@ -49,12 +49,11 @@ function getDateRange(period, from, to) {
     }
 }
 
-// ─── Apps Script fetch ────────────────────────────────────────────────────────
+// ─── Events fetch ─────────────────────────────────────────────────────────────
 
 // Fetches all events via the custom API (api.cipherinteractive.dev/api/mainframe/events),
-// which caches the getEventLog result in-memory (5-min TTL, stale-while-revalidate)
-// and uses a 25-second GAS timeout — eliminating the cold-start 502s that occurred
-// when calling Apps Script directly from Netlify.
+// which reads directly from Google Sheets and caches results in-memory
+// (5-min TTL, stale-while-revalidate).
 async function fetchEvents(fromMs, toMs) {
     const data = await cipherApiGet('/api/mainframe/events');
     if (!Array.isArray(data)) throw new Error('Expected event array from mainframe API');

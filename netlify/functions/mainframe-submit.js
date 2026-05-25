@@ -1,8 +1,7 @@
 // POST /api/mainframe/submit
-// Auth-gated proxy for Apps Script mutation calls.
-// Routes through api.cipherinteractive.dev which uses a 25-second GAS
-// timeout (vs. the previous 7-second limit) and keeps GAS warm via
-// background refresh so mutations typically complete in 1-3 seconds.
+// Auth-gated proxy for Sheets mutation calls.
+// Routes through api.cipherinteractive.dev which writes directly to
+// Google Sheets — mutations typically complete in 1-3 seconds.
 'use strict';
 
 const { verifySession, json, cipherApiPost } = require('./_shared');

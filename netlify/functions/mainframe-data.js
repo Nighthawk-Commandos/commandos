@@ -3,8 +3,8 @@
 // Cache layers:
 //   1. Netlify CDN edge cache (s-maxage=600 — 10 min)
 //   2. api.cipherinteractive.dev in-memory cache (10-min, stale-while-revalidate)
-//      — the custom API keeps GAS warm via background refresh, so this almost
-//        always returns in < 100 ms with no GAS round-trip.
+//      — reads directly from Google Sheets; cache is pre-populated on bot startup
+//        so requests almost always return in < 100 ms.
 //   3. Firestore stale fallback — if the custom API is unreachable, serve
 //      up to 24 hours of stale data rather than returning a 502.
 'use strict';

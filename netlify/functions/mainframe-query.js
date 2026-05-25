@@ -1,8 +1,8 @@
 // GET /api/mainframe/query?fn=...&payload=...
-// Auth-gated proxy for read-only Apps Script queries.
+// Auth-gated proxy for read-only Sheets queries.
 // Routes through api.cipherinteractive.dev which caches responses
-// in-memory (per-fn TTL) and keeps GAS warm — so most calls return
-// in < 100 ms with no GAS round-trip.
+// in-memory (per-fn TTL) and reads directly from Google Sheets —
+// so most calls return in < 100 ms from cache.
 'use strict';
 
 const { verifySession, json, cipherApiGet } = require('./_shared');
