@@ -11,10 +11,10 @@
   "dependencies": {
     "@netlify/blobs": "^7.3.0",
     "firebase": "^12.12.0",
-    "firebase-admin": "^12.0.0",
-    "netlify": "^24.9.0"
+    "firebase-admin": "^12.0.0"
   },
   "devDependencies": {
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.24.0",
+    "netlify": "^24.9.0"
   }
 }
