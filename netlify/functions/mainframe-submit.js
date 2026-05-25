@@ -2,6 +2,10 @@
 // Auth-gated proxy for Sheets mutation calls.
 // Routes through api.cipherinteractive.dev which writes directly to
 // Google Sheets — mutations typically complete in 1-3 seconds.
+//
+// submitEventLog is routed to /api/mainframe/eventlog (fast path):
+// the bot writes to the sheet in the background and returns an event ID
+// immediately (~50 ms) rather than blocking on the Sheets API round-trip.
 'use strict';
 
 const { verifySession, json, cipherApiPost } = require('./_shared');
@@ -30,6 +34,12 @@ exports.handler = async (event) => {
     }
 
     try {
+        // Fast path: background sheet write, returns eventId immediately
+        if (fn === 'submitEventLog') {
+            const data = await cipherApiPost('/api/mainframe/eventlog', payload);
+            return json(200, data);
+        }
+
         const data = await cipherApiPost('/api/mainframe/submit', { fn, payload });
         return json(200, data);
     } catch (err) {
