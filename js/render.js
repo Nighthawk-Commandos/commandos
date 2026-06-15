@@ -2138,16 +2138,29 @@ function _adminRenderErrors(body, isCurrent) {
 
 
 // ── Officer management ────────────────────────────────────────
+// The group members list is cached client-side for up to an hour. If a
+// username isn't found, refresh once from the server before rejecting -
+// covers the case where someone was just added to the sheet.
+function _ensureMember(username, resId, onOk) {
+    if (!GROUP_MEMBERS.length || GROUP_MEMBERS.indexOf(username) > -1) { onOk(); return; }
+    API.bustCache('c:members');
+    API.getGroupMembers().then(function (members) {
+        setMembers(members);
+        if (!GROUP_MEMBERS.length || GROUP_MEMBERS.indexOf(username) > -1) { onOk(); return; }
+        toast('"' + username + '" is not in the group members list', 'error');
+        setHTML(resId, '<span style="color:#c0392b">Not found in group members list.</span>');
+    }).catch(function () {
+        toast('"' + username + '" is not in the group members list', 'error');
+        setHTML(resId, '<span style="color:#c0392b">Not found in group members list.</span>');
+    });
+}
+
 export function adminAddOfficer() {
     var username = ((document.getElementById('admin-mf-add-inp') || {}).value || '').trim();
     var rank     = ((document.getElementById('admin-mf-add-rank') || {}).value || '').trim();
     if (!username) { toast('Enter a username', 'error'); return; }
     if (!rank)     { toast('Select a rank', 'error'); return; }
-    if (GROUP_MEMBERS.length && GROUP_MEMBERS.indexOf(username) === -1) {
-        toast('"' + username + '" is not in the group members list', 'error');
-        setHTML('admin-mf-add-res', '<span style="color:#c0392b">Not found in group members list.</span>');
-        return;
-    }
+    _ensureMember(username, 'admin-mf-add-res', function () {
     btnBusy('admin-mf-add-btn', 'Adding\u2026');
     fetch('/api/admin/officers', {
         method: 'POST', credentials: 'same-origin',
@@ -2169,16 +2182,13 @@ export function adminAddOfficer() {
             btnDone('admin-mf-add-btn', 'Add Officer');
             toast('Request failed', 'error');
         });
+    });
 }
 
 export function adminRemoveOfficer() {
     var username = ((document.getElementById('admin-mf-rm-inp') || {}).value || '').trim();
     if (!username) { toast('Enter a username', 'error'); return; }
-    if (GROUP_MEMBERS.length && GROUP_MEMBERS.indexOf(username) === -1) {
-        toast('"' + username + '" is not in the group members list', 'error');
-        setHTML('admin-mf-rm-res', '<span style="color:#c0392b">Not found in group members list.</span>');
-        return;
-    }
+    _ensureMember(username, 'admin-mf-rm-res', function () {
     if (!confirm('Remove officer "' + username + '" from the tracker?')) return;
     btnBusy('admin-mf-rm-btn', 'Removing\u2026');
     fetch('/api/admin/officers', {
@@ -2206,4 +2216,5 @@ export function adminRemoveOfficer() {
             btnDone('admin-mf-rm-btn', 'Remove Officer');
             toast('Request failed', 'error');
         });
+    });
 }

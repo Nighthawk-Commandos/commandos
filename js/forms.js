@@ -294,6 +294,12 @@ export function submitTR() {
 // ── Form: Exemption ───────────────────────────────────────────
 var EX = { username:'', departments:[] };
 
+// Submitting opens this Google Form pre-filled in a new tab instead of
+// posting to the mainframe backend.
+var EX_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScst5hFg7GzAm2n-ShoYnfcTP6eLFOXUnjrkGnRNAfJh-8SrQ/viewform';
+var EX_RANKS = ['Probationary Trooper','Commando','Sentinel','Infiltrator','Operative','Specialist','Interim Warrant Officer','Warrant officer','Chief Warrant Officer','Cpatain'];
+var EX_DEPTS = ['Ghosts','Welfare','Progression','IA'];
+
 export function renderFormExemption() {
     if (requireGroup()) return;
     var h = pageHeader('Exemption Request','Submit an activity exemption') +
@@ -305,20 +311,25 @@ export function renderFormExemption() {
             '<div class="ac-wrap"><input class="ac-input" id="ex-user-inp" placeholder="Type to search…" autocomplete="off"><div class="ac-dropdown" id="ex-user-dd"></div></div>',
             'Username required.') +
         '<div id="ex-days-info"></div>' +
+        fld('field-ex-rank','Rank','*',
+            '<select id="ex-rank"><option value="" disabled selected>Select rank…</option>'+
+            EX_RANKS.map(function(r){ return '<option value="'+esc(r)+'">'+esc(r)+'</option>'; }).join('')+
+            '</select>','Rank required.') +
         fld('field-ex-reason','Reason','*','<input type="text" id="ex-reason" placeholder="Reason for exemption">','Reason required.') +
         fld('field-ex-start','Start Date','*','<input type="date" id="ex-start" data-change="calcExDays">','Start date required.') +
         fld('field-ex-end','End Date (must be Monday)','*','<input type="date" id="ex-end" data-change="calcExDays">','End date required.') +
         '<div id="ex-calc-info"></div>' +
-        fld('field-ex-dept','Departments','*',
+        fld('field-ex-dept','Departments','',
             '<div class="ac-wrap">'+
             '<div class="tags-area" id="ex-dept-area"><input class="tags-input" id="ex-dept-inp" placeholder="Select departments…" readonly data-focus="toggleExDeptDD" autocomplete="off"></div>'+
             '<div class="ac-dropdown" id="ex-dept-dd">'+
-            ['Ghosts','Progression','Welfare','IA','Librarium','N/A'].map(function(d){
+            EX_DEPTS.map(function(d){
                 return '<div class="ac-option" data-mousedown="toggleExDept" data-dept="'+esc(d)+'">'+d+'</div>';
             }).join('')+
             '</div>'+
-            '</div>','At least one department required.') +
-        '<div class="cooldown-bar-wrap" id="ex-cd-wrap"><div class="cooldown-bar" id="ex-cd-bar"></div></div>' +
+            '</div>','') +
+        '<div class="field-hint">"Commandos" is always included automatically.</div>' +
+        '<div class="field-hint">Submitting opens a pre-filled Google Form in a new tab — review and submit it there to finalize the request.</div>' +
         '<div class="form-actions"><button class="btn-ghost" data-click="resetEX">Clear</button>' +
         '<button class="btn-primary" id="ex-submit-btn" data-click="submitEX">Submit Exemption</button></div>' +
         '</div></div></div>';
@@ -386,9 +397,10 @@ export function calcExDays() {
 export function resetEX() {
     EX={username:'',departments:[]};
     ['ex-user-inp','ex-reason','ex-start','ex-end'].forEach(function(id){sv(id,'');});
+    var rs=$('ex-rank'); if(rs)rs.selectedIndex=0;
     renderExDeptTags();
     var dd=$('ex-dept-dd'); if(dd)dd.querySelectorAll('.ac-option').forEach(function(o){o.classList.remove('selected');});
-    clrAll(['field-ex-user','field-ex-reason','field-ex-start','field-ex-end','field-ex-dept']);
+    clrAll(['field-ex-user','field-ex-rank','field-ex-reason','field-ex-start','field-ex-end']);
     var di=$('ex-days-info'); if(di)di.innerHTML='';
     var ci=$('ex-calc-info'); if(ci)ci.innerHTML='';
 }
@@ -396,10 +408,10 @@ export function resetEX() {
 export function submitEX() {
     var ok=true;
     var user=EX.username||(gv('ex-user-inp')||'').trim(); if(!user){setFieldErr('field-ex-user','Username required.'); ok=false;} else clrFieldErr('field-ex-user');
+    var rank=gv('ex-rank')||'';                            if(!rank){setFieldErr('field-ex-rank','Rank required.'); ok=false;} else clrFieldErr('field-ex-rank');
     var reason=(gv('ex-reason')||'').trim();               if(!reason){setFieldErr('field-ex-reason','Reason required.'); ok=false;} else clrFieldErr('field-ex-reason');
     var start=gv('ex-start')||'';                          if(!start){setFieldErr('field-ex-start','Start date required.'); ok=false;} else clrFieldErr('field-ex-start');
     var end=gv('ex-end')||'';                              if(!end){setFieldErr('field-ex-end','End date required.'); ok=false;} else clrFieldErr('field-ex-end');
-    if(!EX.departments.length){setFieldErr('field-ex-dept','At least one department required.'); ok=false;} else clrFieldErr('field-ex-dept');
     if(!ok)return;
 
     if(start&&end){
@@ -409,13 +421,19 @@ export function submitEX() {
         if(e<=s){setFieldErr('field-ex-end','End must be after start.'); return;}
     }
 
-    btnBusy('ex-submit-btn','Submitting…');
-    API.submitExemption({hp:gv('ex-hp')||'',username:user,reason:reason,startDate:start,endDate:end,departments:EX.departments.join(', ')})
-        .then(function(r){
-            btnDone('ex-submit-btn','Submit Exemption');
-            if(r&&r.success){toast('Exemption submitted!','success'); resetEX(); cooldown('ex-submit-btn','ex-cd-wrap','ex-cd-bar',1800);}
-            else toast((r&&r.error)||'Submission failed.','error');
-        }).catch(function(e){btnDone('ex-submit-btn','Submit Exemption'); toast('Error: '+e.message,'error');});
+    var depts=['Commandos'].concat(EX.departments);
+    var params=[
+        'usp=pp_url',
+        'entry.89896703='+encodeURIComponent(user),
+        'entry.1970321278='+encodeURIComponent(rank),
+        'entry.532276252='+encodeURIComponent(reason),
+        'entry.1198597606='+encodeURIComponent(start),
+        'entry.932785517='+encodeURIComponent(end)
+    ].concat(depts.map(function(d){ return 'entry.1224052388='+encodeURIComponent(d); }));
+
+    window.open(EX_FORM_URL+'?'+params.join('&'), '_blank', 'noopener');
+    toast('Opening exemption form…','success');
+    resetEX();
 }
 
 // ── Form: Missing AP ──────────────────────────────────────────
