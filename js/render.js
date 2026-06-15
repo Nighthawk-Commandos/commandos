@@ -2141,12 +2141,16 @@ function _adminRenderErrors(body, isCurrent) {
 // The group members list is cached client-side for up to an hour. If a
 // username isn't found, refresh once from the server before rejecting -
 // covers the case where someone was just added to the sheet.
+function _memberIn(username) {
+    var lc = username.toLowerCase();
+    return GROUP_MEMBERS.some(function (m) { return m.toLowerCase() === lc; });
+}
 function _ensureMember(username, resId, onOk) {
-    if (!GROUP_MEMBERS.length || GROUP_MEMBERS.indexOf(username) > -1) { onOk(); return; }
+    if (!GROUP_MEMBERS.length || _memberIn(username)) { onOk(); return; }
     API.bustCache('c:members');
     API.getGroupMembers().then(function (members) {
         setMembers(members);
-        if (!GROUP_MEMBERS.length || GROUP_MEMBERS.indexOf(username) > -1) { onOk(); return; }
+        if (!GROUP_MEMBERS.length || _memberIn(username)) { onOk(); return; }
         toast('"' + username + '" is not in the group members list', 'error');
         setHTML(resId, '<span style="color:#c0392b">Not found in group members list.</span>');
     }).catch(function () {
